@@ -1,0 +1,37 @@
+# Dependencias del backend del canal Asiscole.
+# Se fijan rangos por version mayor para recibir parches de seguridad sin roturas.
+
+# --- Framework web y API ---
+Django>=5.1,<6.0
+djangorestframework>=3.15,<4.0
+drf-spectacular>=0.27,<1.0
+
+# --- Base de datos (BD central + BDs de colegio via multiples alias) ---
+psycopg[binary]>=3.2,<4.0
+
+# --- Tareas asincronas y cache ---
+celery>=5.4,<6.0
+redis>=5.0,<7.0
+django-redis>=5.4,<6.0
+
+# --- Tokens de sesion y de datos (RNF-01 / SRS 14.1) ---
+PyJWT>=2.9,<3.0
+
+# --- Normalizacion de telefonos a E.164 (telefono_contacto viene sucio) ---
+phonenumbers>=8.13,<10.0
+
+# --- Login del administrador: usuarios.password_hash del colegio es bcrypt ($2...) ---
+bcrypt>=4.2,<5.0
+
+# --- Configuracion por variables de entorno (.env.example) ---
+python-dotenv>=1.0,<2.0
+
+# --- Servidor de aplicacion en produccion ---
+gunicorn>=22.0,<24.0
+
+# --- Pruebas ---
+pytest>=8.3,<9.0
+pytest-django>=4.9,<5.0
+factory-boy>=3.3,<4.0
+# Redis de mentira para las pruebas del directorio y del rate limiting.
+fakeredis>=2.25,<3.0

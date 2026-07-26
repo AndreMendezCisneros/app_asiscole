@@ -1,0 +1,1 @@
+"""Apps del canal Asiscole."""

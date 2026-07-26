@@ -1,0 +1,40 @@
+---
+description: Contexto de dominio de Asiscole, mapeo de datos y restricciones sobre el esquema legado
+alwaysApply: true
+---
+
+# Asiscole — contexto del canal apoderado
+
+Canal móvil que reemplaza WhatsApp para avisar al apoderado de entradas, salidas,
+incidencias y avisos. El sistema escolar (Asiscole/SIE) ya existe, con una base de datos
+Supabase por colegio. Requerimientos en `docs/Asiscole_SRS_v5.docx`.
+
+## Mapeo de datos obligatorio
+
+El SRS habla de "DNI del estudiante" pero el esquema real no tiene esa columna:
+
+- DNI del estudiante = `estudiantes.codigo_barras` (VARCHAR 50, UNIQUE)
+- Teléfono del apoderado = `estudiantes.telefono_contacto` (texto libre, normalizar a E.164)
+- Vínculo apoderado-estudiante = `padres_estudiantes` (ya existe, se reutiliza)
+- Rol del apoderado = `usuarios.rol = 'Padre'` (ya existe en el enum)
+
+## Restricciones sobre el esquema legado
+
+- Nunca modificar tablas, RPCs `sie_*`, triggers, RLS ni GRANTs existentes.
+- Toda tabla nueva lleva prefijo `asis_`. El prefijo `app_` ya lo usa el sistema web
+  (`app_sesiones`) y está prohibido para código nuevo.
+- `app_sesiones` es del sistema web (15 min para `Padre`). El canal lleva su propio
+  almacén de sesión en la BD central, con 10 días y `device_id`.
+- Django se conecta con un rol de servicio que evita RLS. El aislamiento del canal se
+  aplica siempre en la capa de API.
+
+## Reglas de producto que no se negocian
+
+- El backend genera el texto de todos los mensajes. El cliente solo renderiza.
+- Una sola sesión activa por cuenta. Un segundo login se deniega con 409; no reemplaza.
+- Offline solo permite leer mensajes ya cacheados.
+- Español (Perú), zona horaria del colegio (America/Lima).
+
+## Contract-first
+
+Ningún cliente consume un endpoint que no esté antes en `docs/openapi.yaml`.

@@ -1,0 +1,1009 @@
+openapi: 3.0.3
+
+info:
+  title: Asiscole — API del canal apoderado
+  version: 0.1.0
+  description: |
+    Contrato de la API del canal de notificación de Asiscole.
+
+    Es contract-first: ningún cliente consume un endpoint que no esté descrito aquí.
+
+    ## Modelo de tokens (SRS 14.1)
+
+    Hay dos tokens. El de sesión es el principal y prueba el login; el de datos es el
+    secundario y autoriza las consultas, con vida corta.
+
+    - `session_token`: 10 días. Se renueva por actividad entre el día 7 y el día 10.
+      Solo sirve para `/auth/*`.
+    - `data_token`: 15 a 60 minutos. Es el que llevan todos los endpoints de negocio.
+      Si caduca con la sesión viva, el cliente llama a `/auth/refresh-data` de forma
+      transparente y el usuario no percibe nada.
+
+    Si `session_token` caduca o fue revocado (cierre de sesión, suspensión, transferencia
+    aprobada en otro dispositivo o cierre forzado por el administrador), `refresh-data`
+    responde 401 o 410 y el cliente vuelve al login.
+
+    ## Identificación del apoderado
+
+    El login usa el teléfono del apoderado en formato E.164 y el documento del estudiante.
+    En la base de datos del colegio ese documento es la columna `estudiantes.codigo_barras`.
+
+    ## Sesión única
+
+    Solo hay una sesión activa por cuenta. Un segundo intento se deniega con
+    `409 SESSION_ALREADY_ACTIVE`; nunca reemplaza a la sesión vigente. El dispositivo nuevo
+    puede pedir una transferencia, que el dispositivo activo aprueba o rechaza.
+
+servers:
+  - url: https://api.asiscole.pe/v0.1
+    description: Producción
+  - url: http://localhost:8000/v0.1
+    description: Desarrollo
+
+tags:
+  - name: auth
+    description: Registro, login, tokens y transferencia de sesión
+  - name: mensajes
+    description: Bandeja persistente del apoderado
+  - name: asistencias
+    description: Agenda de entradas y salidas
+  - name: incidencias
+    description: Incidencias del estudiante
+  - name: perfil
+    description: Perfil, estudiantes vinculados y eliminación de cuenta
+  - name: admin
+    description: Administración de cuentas y avisos institucionales
+  - name: sistema
+    description: Feature flags y salud
+
+security:
+  - dataToken: []
+
+paths:
+  # ---------------------------------------------------------------- auth ----
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Iniciar sesión (RF-A01 a RF-A05)
+      description: |
+        Valida que el teléfono coincida exactamente con el contacto registrado del
+        estudiante cuyo documento se envía. Emite ambos tokens y registra el dispositivo.
+
+        Si ya existe una sesión activa en otro dispositivo, responde 409 y notifica por
+        push al dispositivo activo. El cliente puede entonces llamar a
+        `/auth/session-transfer/request`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [telefono, documento_estudiante, device_id]
+              properties:
+                telefono:
+                  type: string
+                  description: Formato E.164
+                  example: "+51987654321"
+                documento_estudiante:
+                  type: string
+                  description: Corresponde a `estudiantes.codigo_barras`
+                  example: "70123456"
+                device_id:
+                  type: string
+                  example: "a4f1c2e0-9d3b-4a11-8f2e-5c7d9e1b3a44"
+                modelo:
+                  type: string
+                  example: "Xiaomi Redmi Note 12"
+                sistema_operativo:
+                  type: string
+                  example: "Android 14"
+                push_token:
+                  type: string
+                alias:
+                  type: string
+                  description: Nombre para mostrar, opcional (RF-A06)
+      responses:
+        "200":
+          description: Sesión creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SesionCreada"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/AccountSuspended" }
+        "404": { $ref: "#/components/responses/StudentLinkNotFound" }
+        "409": { $ref: "#/components/responses/SessionAlreadyActive" }
+        "423": { $ref: "#/components/responses/AccountLocked" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/UpstreamSchoolDbUnavailable" }
+
+  /auth/refresh-data:
+    post:
+      tags: [auth]
+      summary: Renovar el token de datos
+      description: |
+        Se llama con el `session_token`. Devuelve un `data_token` nuevo sin exigir login.
+        Es la operación que hace transparente la caducidad del token corto.
+      security:
+        - sessionToken: []
+      responses:
+        "200":
+          description: Token de datos emitido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataToken"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountSuspended" }
+        "410": { $ref: "#/components/responses/SessionExpired" }
+
+  /auth/renew-session:
+    post:
+      tags: [auth]
+      summary: Renovar el token de sesión (RF-A07)
+      description: |
+        Solo procede dentro de la ventana de renovación, entre el día 7 y el día 10 de
+        vida del token. Fuera de esa ventana devuelve el token actual sin rotarlo.
+      security:
+        - sessionToken: []
+      responses:
+        "200":
+          description: Sesión renovada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SesionCreada"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountSuspended" }
+        "410": { $ref: "#/components/responses/SessionExpired" }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Cerrar sesión (CU-07)
+      description: Invalida la sesión activa y desactiva el push token del dispositivo.
+      security:
+        - sessionToken: []
+      responses:
+        "204": { description: Sesión cerrada }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /auth/session-transfer/request:
+    post:
+      tags: [auth]
+      summary: Solicitar traspaso de sesión al dispositivo nuevo (RF-A09)
+      description: |
+        Se invoca desde el dispositivo denegado tras un 409. Crea una solicitud con TTL de
+        5 minutos y envía un push al dispositivo con la sesión activa para que la apruebe
+        o la rechace. Límite de 3 solicitudes por hora y por cuenta.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [telefono, documento_estudiante, device_id]
+              properties:
+                telefono: { type: string, example: "+51987654321" }
+                documento_estudiante: { type: string, example: "70123456" }
+                device_id: { type: string }
+      responses:
+        "202":
+          description: Solicitud creada, a la espera de aprobación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SolicitudTransferencia"
+        "404": { $ref: "#/components/responses/StudentLinkNotFound" }
+        "409": { $ref: "#/components/responses/TransferAlreadyPending" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /auth/session-transfer/{id}/approve:
+    post:
+      tags: [auth]
+      summary: Aprobar el traspaso desde el dispositivo activo (RF-A09)
+      description: |
+        Cierra la sesión del dispositivo actual y habilita al dispositivo solicitante,
+        que obtendrá sus tokens al reintentar el login.
+      security:
+        - sessionToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdTransferencia"
+      responses:
+        "204": { description: Traspaso aprobado }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "410": { $ref: "#/components/responses/TransferExpired" }
+
+  /auth/session-transfer/{id}/reject:
+    post:
+      tags: [auth]
+      summary: Rechazar el traspaso (RF-A09)
+      security:
+        - sessionToken: []
+      parameters:
+        - $ref: "#/components/parameters/IdTransferencia"
+      responses:
+        "204": { description: Traspaso rechazado }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "410": { $ref: "#/components/responses/TransferExpired" }
+
+  /auth/session-transfer/{id}:
+    get:
+      tags: [auth]
+      summary: Consultar el estado de la solicitud
+      description: El dispositivo solicitante consulta si ya fue aprobada.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdTransferencia"
+      responses:
+        "200":
+          description: Estado actual
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SolicitudTransferencia"
+        "410": { $ref: "#/components/responses/TransferExpired" }
+
+  /auth/admin/login:
+    post:
+      tags: [auth]
+      summary: Login del administrador (RF-B01)
+      description: |
+        Usuario y contraseña contra la tabla `usuarios` del colegio. Sujeto a la misma
+        política de sesión única que el apoderado.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [usuario, password, device_id, tenant_id]
+              properties:
+                usuario: { type: string }
+                password: { type: string, format: password }
+                device_id: { type: string }
+                tenant_id: { type: string, example: "jean_piaget" }
+      responses:
+        "200":
+          description: Sesión de administrador creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SesionCreada"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409": { $ref: "#/components/responses/SessionAlreadyActive" }
+        "423": { $ref: "#/components/responses/AccountLocked" }
+
+  # ------------------------------------------------------------ mensajes ----
+  /mensajes:
+    get:
+      tags: [mensajes]
+      summary: Bandeja del apoderado (RF-D01, RF-D06)
+      description: |
+        Sincronización incremental. El cliente envía `since` con la marca de tiempo del
+        último mensaje que tiene, o `cursor` para paginar hacia atrás.
+
+        Los hilos están unificados por cuenta, no separados por estudiante (SRS 13).
+      parameters:
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: tipo
+          in: query
+          schema:
+            $ref: "#/components/schemas/TipoMensaje"
+      responses:
+        "200":
+          description: Página de mensajes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Mensaje" }
+                  next_cursor: { type: string, nullable: true }
+                  no_leidos_por_canal:
+                    type: object
+                    description: Insignias por canal (RF-C02)
+                    additionalProperties: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/AccountSuspended" }
+
+  /mensajes/leidos:
+    post:
+      tags: [mensajes]
+      summary: Marcar mensajes como leídos (RF-D04)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "204": { description: Marcados }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # --------------------------------------------------------- asistencias ----
+  /asistencias:
+    get:
+      tags: [asistencias]
+      summary: Agenda mensual del estudiante activo (RF-F01, RF-F02)
+      description: |
+        Devuelve un día por cada fecha lectiva del mes. Los estados `falta` y
+        `sin_registro` no existen como filas en la base del colegio: se derivan de la
+        ausencia de registro, por eso siempre se responde el mes completo.
+
+        Requiere conexión. El cliente nunca infiere estos datos localmente.
+      parameters:
+        - $ref: "#/components/parameters/EstudianteId"
+        - name: anio
+          in: query
+          required: true
+          schema: { type: integer, example: 2026 }
+        - name: mes
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+      responses:
+        "200":
+          description: Días del mes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/DiaAsistencia" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+        "503": { $ref: "#/components/responses/UpstreamSchoolDbUnavailable" }
+
+  # --------------------------------------------------------- incidencias ----
+  /incidencias:
+    get:
+      tags: [incidencias]
+      summary: Listado de incidencias del estudiante activo (RF-G01)
+      parameters:
+        - $ref: "#/components/parameters/EstudianteId"
+        - name: desde
+          in: query
+          schema: { type: string, format: date }
+        - name: hasta
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Incidencias
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Incidencia" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+        "503": { $ref: "#/components/responses/UpstreamSchoolDbUnavailable" }
+
+  /incidencias/{id}:
+    get:
+      tags: [incidencias]
+      summary: Detalle con evidencias y quién reportó (RF-G01, RF-G04)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - $ref: "#/components/parameters/EstudianteId"
+      responses:
+        "200":
+          description: Detalle
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IncidenciaDetalle" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+        "404": { $ref: "#/components/responses/StudentLinkNotFound" }
+
+  # -------------------------------------------------------------- perfil ----
+  /perfil:
+    get:
+      tags: [perfil]
+      summary: Perfil del apoderado
+      responses:
+        "200":
+          description: Perfil
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Perfil" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+    patch:
+      tags: [perfil]
+      summary: Editar alias y estudiante activo (RF-A06, RF-I03)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alias: { type: string }
+                estudiante_activo_id: { type: integer }
+      responses:
+        "200":
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Perfil" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /perfil/estudiantes:
+    get:
+      tags: [perfil]
+      summary: Estudiantes vinculados al teléfono (RF-I02)
+      description: |
+        Lista completa de hijos vinculados, con su colegio, grado y sección, marcando cuál
+        es el activo. El cliente puede cachearla para mostrarla en modo offline en solo
+        lectura, pero no puede vincular estudiantes nuevos sin conexión.
+      responses:
+        "200":
+          description: Estudiantes vinculados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/EstudianteVinculado" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /perfil/estudiantes/vincular:
+    post:
+      tags: [perfil]
+      summary: Vincular un estudiante adicional (RF-I04)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [documento_estudiante]
+              properties:
+                documento_estudiante: { type: string }
+      responses:
+        "201":
+          description: Estudiante vinculado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstudianteVinculado" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/StudentLinkNotFound" }
+        "503": { $ref: "#/components/responses/UpstreamSchoolDbUnavailable" }
+
+  /perfil/push-token:
+    put:
+      tags: [perfil]
+      summary: Registrar o actualizar el token de push del dispositivo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, plataforma]
+              properties:
+                token: { type: string }
+                plataforma:
+                  type: string
+                  enum: [android, ios]
+      responses:
+        "204": { description: Token registrado }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /perfil/eliminar-cuenta:
+    post:
+      tags: [perfil]
+      summary: Eliminar la cuenta del apoderado (RF-I06, CU-10)
+      description: |
+        Exigido por las tiendas. Revoca sesiones, desactiva el push y anonimiza los datos
+        personales del apoderado en la base central. El expediente académico del estudiante
+        en la base del colegio no se toca.
+
+        Pide reautenticación para evitar borrados accidentales o por terceros.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [documento_estudiante]
+              properties:
+                documento_estudiante:
+                  type: string
+                  description: Reautenticación
+      responses:
+        "204": { description: Cuenta eliminada }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+
+  # --------------------------------------------------------------- admin ----
+  /admin/apoderados:
+    get:
+      tags: [admin]
+      summary: Listar cuentas de apoderados (RF-B04)
+      parameters:
+        - name: buscar
+          in: query
+          schema: { type: string }
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [activo, suspendido]
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Cuentas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApoderadoAdmin" }
+                  next_cursor: { type: string, nullable: true }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+
+  /admin/apoderados/{id}/suspender:
+    post:
+      tags: [admin]
+      summary: Suspender una cuenta (RF-J01 a RF-J03)
+      description: |
+        Efecto inmediato: invalida los tokens activos y deniega cualquier login nuevo.
+        El motivo es obligatorio y se le muestra al apoderado en la pantalla de bloqueo.
+      parameters:
+        - $ref: "#/components/parameters/IdApoderado"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo]
+              properties:
+                motivo: { type: string, minLength: 5 }
+                notificar_push: { type: boolean, default: true }
+      responses:
+        "204": { description: Cuenta suspendida }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+
+  /admin/apoderados/{id}/reactivar:
+    post:
+      tags: [admin]
+      summary: Reactivar una cuenta (RF-J04)
+      description: Permite un login nuevo. La sesión anterior nunca se restaura.
+      parameters:
+        - $ref: "#/components/parameters/IdApoderado"
+      responses:
+        "204": { description: Cuenta reactivada }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+
+  /admin/apoderados/{id}/cerrar-sesion:
+    post:
+      tags: [admin]
+      summary: Forzar el cierre de la sesión activa (RF-B04)
+      description: |
+        Vía de escape cuando el apoderado perdió el dispositivo y no puede aprobar una
+        transferencia.
+      parameters:
+        - $ref: "#/components/parameters/IdApoderado"
+      responses:
+        "204": { description: Sesión cerrada }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+
+  /admin/avisos:
+    post:
+      tags: [admin]
+      summary: Enviar un aviso institucional (RF-B04)
+      description: Filtra los destinatarios por nivel, grado y sección.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [texto]
+              properties:
+                texto: { type: string, minLength: 1 }
+                nivel:
+                  type: string
+                  enum: [Primaria, Secundaria]
+                grado: { type: string }
+                seccion: { type: string }
+      responses:
+        "202":
+          description: Aviso encolado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  destinatarios: { type: integer }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+
+  # ------------------------------------------------------------- ingesta ----
+  /ingesta/eventos:
+    post:
+      tags: [ingesta]
+      summary: Recibir evento del colegio (entrada, salida o incidencia)
+      description: |
+        Alternativa al outbox (`001_colegio_outbox.sql`). Asiscole (u otro sistema
+        escolar) llama este endpoint cuando registra un evento y el canal genera
+        el mensaje + push para los apoderados vinculados.
+
+        Autenticación: cabecera `X-Asiscole-Ingest-Key` con el valor de
+        `INGEST_API_KEY` del backend. No usa JWT de apoderado.
+
+        Idempotencia: el mismo `(tipo, id_registro)` no duplica mensajes por
+        apoderado (`origen_evento = "{tipo}:{id_registro}"`).
+
+        El `payload` sigue la misma forma que escribe el trigger del outbox
+        (nombre, grado, hora, estado, etc.). No enviar teléfono ni codigo_barras.
+      security:
+        - ingestApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventoIngesta"
+            examples:
+              entrada:
+                value:
+                  tenant_id: jean_piaget
+                  tipo: entrada
+                  id_estudiante: 10
+                  id_registro: 1042
+                  payload:
+                    id_estudiante: 10
+                    nombre_completo: "Ana Pérez"
+                    grado: "3"
+                    seccion: "A"
+                    nivel_educativo: Primaria
+                    fecha: "2026-07-25"
+                    hora_llegada: "07:45"
+                    estado: "A tiempo"
+      responses:
+        "202":
+          description: Evento aceptado (puede haber 0 destinatarios si nadie está vinculado aún)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [creados, origen_evento]
+                properties:
+                  creados: { type: integer, description: Mensajes nuevos insertados }
+                  origen_evento: { type: string, example: "entrada:1042" }
+                  apoderados_notificados: { type: integer }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # ------------------------------------------------------------- sistema ----
+  /feature-flags:
+    get:
+      tags: [sistema]
+      summary: Feature flags remotos (RF-H03)
+      description: Permite activar el módulo de notas sin publicar una versión nueva.
+      responses:
+        "200":
+          description: Flags vigentes
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: boolean }
+                example: { notas: false }
+
+components:
+  securitySchemes:
+    dataToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token de datos, de vida corta. Es el que usan los endpoints de negocio.
+    sessionToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token de sesión, de 10 días. Solo se usa en los endpoints de `/auth`.
+    ingestApiKey:
+      type: apiKey
+      in: header
+      name: X-Asiscole-Ingest-Key
+      description: |
+        Clave compartida entre el sistema escolar (Asiscole) y el canal.
+        Configurar en el backend como `INGEST_API_KEY`.
+
+  parameters:
+    EstudianteId:
+      name: estudiante_id
+      in: query
+      required: true
+      description: |
+        Estudiante activo. El backend verifica siempre que pertenezca a los vínculos del
+        apoderado autenticado; nunca confía en este valor tal cual.
+      schema: { type: integer }
+    IdTransferencia:
+      name: id
+      in: path
+      required: true
+      description: |
+        Identificador de `asis_transferencia_sesion`. Es un entero (BIGSERIAL)
+        serializado como cadena en las respuestas JSON para no romper clientes
+        que lo tratan como texto.
+      schema: { type: string, example: "42" }
+    IdApoderado:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Código estable del catálogo. El cliente reacciona a esto, no al texto.
+        message:
+          type: string
+          description: Mensaje en español, apto para mostrarse al usuario.
+        request_id:
+          type: string
+      example:
+        code: SESSION_ALREADY_ACTIVE
+        message: Ya tienes una sesión activa en otro dispositivo.
+        request_id: 6f1e2c3a-7b4d-4e2f-9a1c-8d5b3e7f0a21
+
+    SesionCreada:
+      type: object
+      properties:
+        session_token: { type: string }
+        session_expira_en: { type: string, format: date-time }
+        data_token: { type: string }
+        data_expira_en: { type: string, format: date-time }
+        perfil: { $ref: "#/components/schemas/Perfil" }
+
+    DataToken:
+      type: object
+      properties:
+        data_token: { type: string }
+        data_expira_en: { type: string, format: date-time }
+
+    SolicitudTransferencia:
+      type: object
+      properties:
+        id:
+          type: string
+          description: BIGSERIAL de la solicitud, como cadena (p. ej. "42")
+          example: "42"
+        estado:
+          type: string
+          enum: [pending, approved, rejected, expired]
+        expira_en: { type: string, format: date-time }
+
+    TipoMensaje:
+      type: string
+      enum: [entrada, salida, incidencia, aviso, personalizado]
+
+    Mensaje:
+      type: object
+      description: |
+        El campo `texto` viene renderizado por el backend. La app lo muestra tal cual y
+        nunca lo compone ni lo reformatea.
+      properties:
+        id: { type: string, format: uuid }
+        tipo: { $ref: "#/components/schemas/TipoMensaje" }
+        texto: { type: string }
+        colegio: { type: string }
+        estudiante_id: { type: integer, nullable: true }
+        estudiante_nombre: { type: string, nullable: true }
+        emitido_en: { type: string, format: date-time }
+        entregado: { type: boolean }
+        leido: { type: boolean }
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Datos para el deep-link, por ejemplo el id de la incidencia.
+
+    DiaAsistencia:
+      type: object
+      properties:
+        fecha: { type: string, format: date }
+        estado:
+          type: string
+          enum: [a_tiempo, tarde, falta, sin_registro]
+        hora_entrada: { type: string, nullable: true, example: "07:45" }
+        hora_salida: { type: string, nullable: true, example: "15:10" }
+        tipo_salida:
+          type: string
+          nullable: true
+          enum: [Normal, Autorizada, Sin registro]
+
+    Incidencia:
+      type: object
+      properties:
+        id: { type: integer }
+        fecha: { type: string, format: date-time }
+        categoria: { type: string }
+        falta: { type: string }
+        es_grave: { type: boolean }
+        tiene_evidencia: { type: boolean }
+        reportado_por: { type: string }
+
+    IncidenciaDetalle:
+      allOf:
+        - $ref: "#/components/schemas/Incidencia"
+        - type: object
+          properties:
+            observaciones: { type: string, nullable: true }
+            evidencias:
+              type: array
+              items:
+                type: object
+                properties:
+                  url: { type: string, format: uri }
+                  tipo_mime: { type: string }
+
+    Perfil:
+      type: object
+      properties:
+        alias: { type: string, nullable: true }
+        telefono: { type: string, description: Enmascarado, por ejemplo +51*****321 }
+        estado:
+          type: string
+          enum: [activo, suspendido]
+        motivo_suspension: { type: string, nullable: true }
+        estudiante_activo_id: { type: integer, nullable: true }
+
+    EstudianteVinculado:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        grado: { type: string }
+        seccion: { type: string }
+        nivel: { type: string }
+        colegio: { type: string }
+        tenant_id: { type: string }
+        activo: { type: boolean, description: Si es el estudiante activo de la sesión }
+
+    ApoderadoAdmin:
+      type: object
+      properties:
+        id: { type: integer }
+        alias: { type: string, nullable: true }
+        telefono: { type: string }
+        estado:
+          type: string
+          enum: [activo, suspendido]
+        motivo_suspension: { type: string, nullable: true }
+        sesion_activa: { type: boolean }
+        ultimo_dispositivo: { type: string, nullable: true }
+        ultima_actividad_en: { type: string, format: date-time, nullable: true }
+        estudiantes:
+          type: array
+          items: { $ref: "#/components/schemas/EstudianteVinculado" }
+
+    EventoIngesta:
+      type: object
+      required: [tenant_id, tipo, id_estudiante, id_registro, payload]
+      properties:
+        tenant_id:
+          type: string
+          description: Debe coincidir con un colegio de `SCHOOL_DATABASES`
+          example: jean_piaget
+        tipo:
+          type: string
+          enum: [entrada, salida, incidencia]
+        id_estudiante: { type: integer }
+        id_registro:
+          type: integer
+          description: PK en el colegio (registros_llegada o incidencias)
+        payload:
+          type: object
+          description: |
+            Datos para la plantilla (misma forma que `asis_outbox.payload`).
+            Mínimo recomendado entrada: nombre_completo, fecha, hora_llegada, estado.
+            No incluir telefono_contacto ni codigo_barras.
+          additionalProperties: true
+
+  responses:
+    ValidationError:
+      description: 400 VALIDATION_ERROR — teléfono o documento con formato inválido
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthenticated:
+      description: 401 UNAUTHENTICATED — falta el token o es inválido
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    AccountSuspended:
+      description: 403 ACCOUNT_SUSPENDED — la cuenta está suspendida
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RoleNotAllowed:
+      description: 403 ROLE_NOT_ALLOWED — el rol no tiene permiso sobre el recurso
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    StudentLinkNotFound:
+      description: |
+        404 STUDENT_LINK_NOT_FOUND — no hay vínculo para ese teléfono y documento.
+        No se revela cuál de los dos falló.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    SessionAlreadyActive:
+      description: 409 SESSION_ALREADY_ACTIVE — ya hay sesión en otro dispositivo
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TransferAlreadyPending:
+      description: 409 TRANSFER_ALREADY_PENDING — ya hay una solicitud en curso
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    SessionExpired:
+      description: 410 SESSION_EXPIRED — la sesión venció, hay que iniciar sesión otra vez
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TransferExpired:
+      description: 410 TRANSFER_EXPIRED — la solicitud de traspaso expiró
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    AccountLocked:
+      description: 423 ACCOUNT_LOCKED — bloqueo temporal por intentos fallidos
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequests:
+      description: 429 TOO_MANY_REQUESTS — se superó el límite de solicitudes
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    UpstreamSchoolDbUnavailable:
+      description: |
+        503 UPSTREAM_SCHOOL_DB_UNAVAILABLE — no se pudo resolver el vínculo porque la base
+        de datos del colegio no respondió y no había entrada usable en caché.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }

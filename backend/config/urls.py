@@ -1,0 +1,40 @@
+"""Rutas raiz del canal Asiscole.
+
+Todos los endpoints de negocio cuelgan de ``/v0.1/``. Contract-first: ningun
+cliente consume una ruta que no este antes en ``docs/openapi.yaml``.
+"""
+
+from __future__ import annotations
+
+from django.http import HttpRequest, JsonResponse
+from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+
+def health(request: HttpRequest) -> JsonResponse:
+    """Sonda de vida del proceso web.
+
+    No toca la BD ni Redis a proposito: responde si el contenedor sirve trafico.
+    El estado de los colegios se expone aparte, en la app de administracion.
+    """
+    return JsonResponse({"status": "ok", "servicio": "asiscole-backend"})
+
+
+urlpatterns = [
+    path("health", health, name="health"),
+    # Documentacion del contrato
+    path("v0.1/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path(
+        "v0.1/docs/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="docs",
+    ),
+    # Apps del canal. Varias siguen con `urlpatterns = []`; se incluyen desde ya
+    # para que anadir un endpoint no obligue a tocar este archivo.
+    path("v0.1/", include("apps.cuentas.urls")),
+    path("v0.1/", include("apps.directorio.urls")),
+    path("v0.1/", include("apps.mensajeria.urls")),
+    path("v0.1/", include("apps.academico.urls")),
+    path("v0.1/", include("apps.ingesta.urls")),
+    path("v0.1/", include("apps.administracion.urls")),
+]

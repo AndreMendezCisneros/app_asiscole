@@ -1,0 +1,41 @@
+---
+description: Reglas para el SQL que se ejecuta sobre las bases de datos de los colegios
+globs: db/**/*.sql
+alwaysApply: false
+---
+
+# SQL sobre las BD de colegio
+
+`db/legacy/bootstrap_colegio.sql` es solo referencia estructural. No se ejecuta y no se edita.
+
+## Solo cambios aditivos
+
+Permitido crear tablas `asis_*`, índices nuevos y triggers nuevos.
+Prohibido: `ALTER`/`DROP` sobre tablas del esquema legado, redefinir funciones `sie_*`,
+tocar políticas RLS o GRANTs existentes, y cambiar el comportamiento de los triggers
+`trg_auditoria_*` o `trigger_incidencias_calcular_nivel`.
+
+## Prefijos
+
+Todo objeto nuevo lleva prefijo `asis_`. El prefijo `app_` está reservado al sistema web.
+
+## Idempotencia
+
+Cada script debe poder ejecutarse dos veces sin fallar:
+
+```sql
+CREATE TABLE IF NOT EXISTS public.asis_outbox (...);
+DROP TRIGGER IF EXISTS asis_trg_llegada_entrada ON public.registros_llegada;
+CREATE TRIGGER asis_trg_llegada_entrada ...;
+```
+
+## Triggers del outbox
+
+Deben ser `AFTER` y no pueden abortar la operación original. Si la escritura en
+`asis_outbox` falla, se registra pero jamás se revierte el registro de asistencia
+o incidencia del colegio.
+
+## Zona horaria
+
+`America/Lima`. Usar `timezone('America/Lima', now())` cuando el resultado sea una fecha
+de calendario, como ya hacen las funciones existentes.

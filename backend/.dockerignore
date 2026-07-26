@@ -1,0 +1,36 @@
+# Nunca entra al contexto de build: secretos, cache y artefactos locales.
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.venv/
+venv/
+env/
+
+.git/
+.gitignore
+.idea/
+.vscode/
+
+*.sqlite3
+*.log
+media/
+staticfiles/
+
+# Credenciales de push: se montan como volumen, no se hornean en la imagen.
+secrets/
+*.p8
+*firebase*.json

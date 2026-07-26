@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.keystore
+*.jks
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+**/credentials*.json
+**/fcm*.json
+
+# Django
+*.sqlite3
+/backend/static/
+/backend/media/
+/backend/staticfiles/
+
+# Flutter / Dart
+frontend/mobile/.dart_tool/
+frontend/mobile/.flutter-plugins
+frontend/mobile/.flutter-plugins-dependencies
+frontend/mobile/build/
+frontend/mobile/.packages
+frontend/mobile/ios/Pods/
+frontend/mobile/ios/.symlinks/
+frontend/mobile/android/.gradle/
+frontend/mobile/android/local.properties
+frontend/mobile/android/app/release/
+frontend/mobile/**/GeneratedPluginRegistrant.*
+*.g.dart
+*.freezed.dart
+
+# Node / admin-web
+node_modules/
+frontend/admin-web/dist/
+frontend/admin-web/.vite/
+
+# Editores y sistema
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+~$*.docx
+
+# Cursor: reglas/skills del proyecto SÍ van al repo
+.cursor/**
+!.cursor/rules/
+!.cursor/rules/**
+!.cursor/skills/
+!.cursor/skills/**
+
+# Logs y basura de debug local
+*.log
+logs/
+debug-*.log
+_tmp_*.py
+
+# Artefactos Android/iOS locales
+*.apk
+*.aab
+*.ipa
+*.dSYM.zip

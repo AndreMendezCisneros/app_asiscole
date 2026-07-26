@@ -1,0 +1,43 @@
+---
+description: Tratamiento de datos personales de menores y sus apoderados (Ley 29733)
+alwaysApply: true
+---
+
+# Datos de menores — Ley N.º 29733
+
+El sistema trata datos de menores de edad. Estas reglas aplican a backend, app y scripts.
+
+## Nunca en logs
+
+Prohibido escribir en logs, trazas, mensajes de error o eventos de telemetría:
+`codigo_barras`, teléfonos, nombres de estudiantes, direcciones y contenido de mensajes.
+
+```python
+# MAL
+logger.info("login de %s con dni %s", telefono, codigo_barras)
+
+# BIEN
+logger.info("login", extra={"tenant": tenant_id, "resultado": "denegado", "request_id": rid})
+```
+
+Para correlacionar se usa `request_id` e identificadores internos, no datos personales.
+
+## Minimización
+
+La app cachea solo los mensajes ya recibidos. No se replican localmente listados de
+estudiantes, asistencia ni incidencias más allá de lo que la pantalla necesita.
+
+## Retención
+
+Los mensajes de la BD central se purgan o anonimizan a los 24 meses de su emisión
+(`MESSAGE_RETENTION_MONTHS`). La caché del dispositivo la borra el apoderado.
+
+## Derechos del titular
+
+La eliminación de cuenta (RF-I06) borra o anonimiza los datos del apoderado y revoca
+sesiones y push. El expediente académico del estudiante en la BD del colegio no se toca.
+
+## Errores hacia el cliente
+
+Un login fallido nunca revela si el fallo fue por teléfono o por documento. Se responde
+siempre `STUDENT_LINK_NOT_FOUND`, sin pistas que faciliten enumerar datos.

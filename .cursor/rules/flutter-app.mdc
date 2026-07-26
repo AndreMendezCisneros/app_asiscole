@@ -1,0 +1,44 @@
+---
+description: Convenciones de la app Flutter del apoderado
+globs: frontend/mobile/**/*.dart
+alwaysApply: false
+---
+
+# App Flutter — Asiscole
+
+## Arquitectura
+
+Feature-first: `lib/features/<feature>/{data,domain,presentation}`. Estado con BLoC/Cubit;
+los widgets no llaman a repositorios ni a la API directamente.
+
+## El backend es la única fuente de verdad del texto
+
+La app nunca compone, completa ni reformatea el contenido de un mensaje. Solo renderiza
+lo que llega en el campo `texto`.
+
+```dart
+// MAL
+Text('${estudiante.nombre} ingresó a las ${hora}');
+
+// BIEN
+Text(mensaje.texto);
+```
+
+## Offline
+
+Solo la bandeja de mensajes funciona sin conexión, leyendo la caché local. Asistencias,
+incidencias y cualquier mutación exigen red y muestran estado de error o vacío. Nunca se
+infieren datos localmente para rellenar una pantalla.
+
+## Tokens
+
+`session_token` y `data_token` van en `flutter_secure_storage`, nunca en
+`SharedPreferences`. Si una llamada devuelve 401 por `data_token` vencido, el interceptor
+lo refresca de forma transparente. Si el `session_token` está vencido o revocado, se
+limpia todo y se vuelve a la pantalla de login.
+
+## Estados de sesión
+
+La máquina de estados sigue el §7.3 del SRS: `Unauthenticated`, `Authenticating`,
+`OnlineSync`, `OfflineMessagesOnly`, `LoginDenied`, `AwaitingTransferApproval`,
+`Suspended`. Ante un 409 se muestra la opción de solicitar transferencia, no un error seco.

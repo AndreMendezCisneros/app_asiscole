@@ -1,0 +1,56 @@
+---
+description: Convenciones del backend Django + DRF del canal Asiscole
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend Django — Asiscole
+
+## Capas
+
+Las vistas no llevan lógica de negocio. El flujo es vista → servicio → repositorio.
+Los repositorios son el único punto que sabe si un dato vive en la BD central o en la
+BD de un colegio.
+
+```python
+# MAL: la vista consulta y decide
+class AsistenciaView(APIView):
+    def get(self, request):
+        rows = RegistroLlegada.objects.using(tenant).filter(...)
+
+# BIEN: la vista delega
+class AsistenciaView(APIView):
+    def get(self, request):
+        datos = asistencia_service.listar_mes(request.apoderado, estudiante_id, anio, mes)
+        return Response(AsistenciaSerializer(datos, many=True).data)
+```
+
+## Multi-tenant
+
+Acceder a la BD de un colegio siempre por el router de tenant, nunca con un alias fijo.
+El alias se resuelve desde el directorio telefónico, no desde el input del usuario.
+
+## Errores
+
+Usar exclusivamente el catálogo de `apps/common/errors.py`, que refleja el §14.2 del SRS.
+Nunca devolver un mensaje suelto en `detail`. Cada error viaja con su código:
+
+```python
+raise SessionAlreadyActive()  # -> 409 {"code": "SESSION_ALREADY_ACTIVE", "message": ...}
+```
+
+Códigos válidos: `VALIDATION_ERROR`, `UNAUTHENTICATED`, `ACCOUNT_SUSPENDED`,
+`ROLE_NOT_ALLOWED`, `STUDENT_LINK_NOT_FOUND`, `SESSION_ALREADY_ACTIVE`,
+`TRANSFER_ALREADY_PENDING`, `SESSION_EXPIRED`, `TRANSFER_EXPIRED`, `ACCOUNT_LOCKED`,
+`TOO_MANY_REQUESTS`, `UPSTREAM_SCHOOL_DB_UNAVAILABLE`.
+
+## Autorización
+
+Todo endpoint de negocio exige un `data_token` válido cuyo `sid` corresponda a una sesión
+activa. El acceso a un estudiante se comprueba siempre contra los vínculos del directorio;
+nunca se confía en un `estudiante_id` que venga del cliente sin verificar.
+
+## Tareas asíncronas
+
+La generación de mensajes y el envío de push van en Celery. Un fallo de push jamás puede
+bloquear ni revertir la lectura del evento de asistencia.

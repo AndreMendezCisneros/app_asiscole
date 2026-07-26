@@ -123,6 +123,10 @@ def registrar_push_token(
             "activo": True,
         },
     )
+    # Si el mensaje se creó antes (push_sin_destinos), se reenvía ahora.
+    from apps.mensajeria.tasks import reintentar_push_pendientes
+
+    reintentar_push_pendientes(apoderado)
 
 
 @transaction.atomic

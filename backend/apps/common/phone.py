@@ -69,8 +69,37 @@ def _candidatos(limpio: str) -> list[str]:
     return lista
 
 
+def extraer_telefonos_e164(
+    valor: str, region: str = REGION_POR_DEFECTO
+) -> list[str]:
+    """Extrae todos los telefonos E.164 de un campo (uno o varios).
+
+    Soporta el caso N:M pragmatico de hoy: `telefono_contacto` con
+    '987654321 / 999888777' (mama y papa) sin tabla intermedia nueva.
+    """
+    if valor is None:
+        return []
+    texto = str(valor).strip()
+    if not texto:
+        return []
+
+    hallados: list[str] = []
+    # Primero el campo entero (un solo numero); luego cada fragmento.
+    fragmentos = [texto, *_SEPARADORES_DE_LISTA.split(texto)]
+    for fragmento in fragmentos:
+        limpio = _limpiar(fragmento)
+        if not limpio:
+            continue
+        for candidato in _candidatos(limpio):
+            resultado = _intentar(candidato, region)
+            if resultado and resultado not in hallados:
+                hallados.append(resultado)
+                break
+    return hallados
+
+
 def normalizar_e164(valor: str, region: str = REGION_POR_DEFECTO) -> str | None:
-    """Normaliza un telefono a E.164.
+    """Normaliza un telefono a E.164 (el primero si el campo trae varios).
 
     Args:
         valor: Telefono tal como viene de la BD del colegio o del formulario.
@@ -82,28 +111,10 @@ def normalizar_e164(valor: str, region: str = REGION_POR_DEFECTO) -> str | None:
 
     Note:
         El resultado es un dato personal: sirve para buscar y comparar, nunca
-        para escribirlo en un log.
+        para escribirlo en un log. Para varios numeros usa `extraer_telefonos_e164`.
     """
-    if valor is None:
-        return None
-    texto = str(valor).strip()
-    if not texto:
-        return None
-
-    # Primero el campo entero; si no cuela, cada fragmento por separado.
-    fragmentos = [texto, *_SEPARADORES_DE_LISTA.split(texto)]
-
-    for fragmento in fragmentos:
-        limpio = _limpiar(fragmento)
-        if not limpio:
-            continue
-
-        for candidato in _candidatos(limpio):
-            resultado = _intentar(candidato, region)
-            if resultado:
-                return resultado
-
-    return None
+    hallados = extraer_telefonos_e164(valor, region=region)
+    return hallados[0] if hallados else None
 
 
 def hash_credencial(telefono: str, codigo: str) -> str:

@@ -1,4 +1,4 @@
-# Asiscole — Canal de notificación al apoderado
+# Asiscole Messenger — Canal de notificación al apoderado
 
 Monorepo del canal móvil de Asiscole: reemplaza WhatsApp como medio de comunicación entre el
 colegio y el apoderado, sobre el sistema escolar Asiscole ya existente (una base de datos

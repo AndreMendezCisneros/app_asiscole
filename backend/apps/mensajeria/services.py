@@ -70,7 +70,17 @@ def listar_mensajes(
             raise ValidationError("El parámetro since no es una fecha válida.")
         if timezone.is_naive(momento):
             momento = timezone.make_aware(momento, timezone.get_current_timezone())
-        qs = qs.filter(emitido_en__gt=momento)
+        # Workaround: con TIME_ZONE=America/Lima + pooler Supabase, los
+        # timestamptz a veces quedan con el reloj local guardado como UTC.
+        # Si el cliente manda el isoformat del API (con offset -05) y Django lo
+        # interpreta a UTC absoluto, `emitido_en__gt` oculta mensajes posteriores.
+        # Comparar el reloj civil del `since` como UTC alinea el filtro con esos
+        # valores. Cuando la BD guarde instantes correctos, el cliente ya no
+        # depende de `since` (trae la bandeja completa reciente).
+        from datetime import timezone as dt_tz
+
+        momento_filtro = momento.replace(tzinfo=dt_tz.utc)
+        qs = qs.filter(emitido_en__gt=momento_filtro)
 
     cursor_dt = _decodificar_cursor(cursor)
     if cursor_dt is not None:

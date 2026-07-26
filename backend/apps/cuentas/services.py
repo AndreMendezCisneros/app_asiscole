@@ -154,6 +154,9 @@ def _guardar_push_token(
         device_id=device_id,
         defaults={"token": token, "plataforma": plataforma, "activo": True},
     )
+    from apps.mensajeria.tasks import reintentar_push_pendientes
+
+    reintentar_push_pendientes(apoderado)
 
 
 def _obtener_o_crear_apoderado(identidad: str, alias: str | None = None) -> Apoderado:

@@ -19,7 +19,7 @@ from collections.abc import Iterator
 import phonenumbers
 from django.db import connections
 
-from apps.common.phone import normalizar_e164
+from apps.common.phone import extraer_telefonos_e164
 from apps.directorio.dto import VinculoDTO
 from apps.directorio.models import VINCULO_ACTIVO
 from config.db_router import tenant_alias
@@ -127,10 +127,9 @@ def consultar_colegio(tenant_id: str, telefono_e164: str) -> list[VinculoDTO]:
 
     vinculos: list[VinculoDTO] = []
     for fila in filas:
-        # Segunda verificacion en Python: la comparacion por digitos puede
-        # empatar numeros de longitudes distintas segun como los escriba el
-        # colegio. Se acepta la fila solo si al normalizarla da el mismo E.164.
-        if normalizar_e164(fila[-1] or "") != telefono_e164:
+        # El campo puede traer varios numeros; basta que uno coincida.
+        telefonos = extraer_telefonos_e164(fila[-1] or "")
+        if telefono_e164 not in telefonos:
             continue
         vinculos.append(_fila_a_vinculo(fila, tenant_id, telefono_e164))
     return vinculos
@@ -141,9 +140,11 @@ def iterar_directorio(tenant_id: str) -> Iterator[VinculoDTO]:
 
     Lo usa la reconciliacion nocturna. Las filas cuyo telefono no se puede
     normalizar se descartan: sin E.164 no hay forma de enrutar nada.
+    Si `telefono_contacto` trae varios numeros, emite un vinculo por cada uno
+    (mismo estudiante, distinto telefono) para el N:M pragmatico.
 
     Yields:
-        Un `VinculoDTO` por estudiante con telefono de contacto valido.
+        Un `VinculoDTO` por (estudiante, telefono) con contacto valido.
     """
     alias = tenant_alias(tenant_id)
     with connections[alias].cursor() as cursor:
@@ -153,7 +154,5 @@ def iterar_directorio(tenant_id: str) -> Iterator[VinculoDTO]:
             if not filas:
                 return
             for fila in filas:
-                telefono = normalizar_e164(fila[-1] or "")
-                if not telefono:
-                    continue
-                yield _fila_a_vinculo(fila, tenant_id, telefono)
+                for telefono in extraer_telefonos_e164(fila[-1] or ""):
+                    yield _fila_a_vinculo(fila, tenant_id, telefono)

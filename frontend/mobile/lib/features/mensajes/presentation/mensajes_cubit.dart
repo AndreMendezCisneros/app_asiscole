@@ -30,7 +30,7 @@ class MensajesCubit extends Cubit<MensajesState> {
       emit(MensajesListos(items));
     } catch (_) {
       try {
-        final cache = await _repo.sincronizar();
+        final cache = await _repo.soloCache();
         emit(MensajesListos(cache, offline: true));
       } catch (e) {
         emit(MensajesError('No se pudieron cargar los mensajes.'));

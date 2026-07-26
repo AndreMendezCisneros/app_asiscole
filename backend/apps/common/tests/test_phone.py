@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from apps.common.phone import hash_credencial, normalizar_e164
+from apps.common.phone import extraer_telefonos_e164, hash_credencial, normalizar_e164
 
 
 @pytest.mark.parametrize(
@@ -55,6 +55,19 @@ def test_toma_el_primer_numero_cuando_el_campo_trae_varios():
     assert normalizar_e164("Mamá: 987654321, Papá: 999888777") == "+51987654321"
 
 
+def test_extrae_todos_los_numeros_del_campo():
+    assert extraer_telefonos_e164("987654321 / 999888777") == [
+        "+51987654321",
+        "+51999888777",
+    ]
+    assert extraer_telefonos_e164("Mamá: 987654321, Papá: 999888777") == [
+        "+51987654321",
+        "+51999888777",
+    ]
+    assert extraer_telefonos_e164("987654321") == ["+51987654321"]
+    assert extraer_telefonos_e164("") == []
+
+
 def test_normalizacion_es_idempotente():
     una_vez = normalizar_e164("987654321")
     assert normalizar_e164(una_vez) == una_vez
@@ -78,4 +91,5 @@ def test_hash_credencial_distingue_credenciales_distintas():
     assert hash_credencial("987654321", "20481234") != hash_credencial("987654321", "20481235")
     assert hash_credencial("987654321", "20481234") != hash_credencial("987654322", "20481234")
     # El separador impide que pares distintos concatenen a la misma cadena.
+    assert hash_credencial("98765", "432120481234") != hash_credencial("987654321", "20481234")
     assert hash_credencial("987", "654321") != hash_credencial("987654", "321")

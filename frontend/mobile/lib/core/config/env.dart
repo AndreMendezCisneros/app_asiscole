@@ -18,7 +18,7 @@ class Env {
   /// Si usas emulador Android, lanza con:
   /// `--dart-define=API_BASE_URL=http://10.0.2.2:8000/v0.1`
   /// Si cambia la IP de tu PC, actualiza esta constante o usa `--dart-define`.
-  static const String _desarrolloAndroid = 'http://192.168.18.206:8000/v0.1';
+  static const String _desarrolloAndroid = 'http://192.168.100.6:8000/v0.1';
   static const String _desarrolloOtros = 'http://localhost:8000/v0.1';
 
   static String get baseUrl {

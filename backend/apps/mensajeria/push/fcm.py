@@ -96,16 +96,26 @@ class ProveedorFCM(ProveedorPush):
     def _enviar_lote(self, messaging, lote: list[str], mensaje: MensajePush) -> ResultadoEnvio:
         """Manda un lote y traduce la respuesta del SDK a `ResultadoEnvio`."""
         try:
+            # Aviso genérico (sin PII): Android en segundo plano/killed necesita
+            # `notification` para mostrar el aviso; el texto del menor sigue
+            # yendo solo por el API autenticado.
+            cuerpo = _cuerpo_generico(mensaje.tipo)
             peticion = messaging.MulticastMessage(
                 tokens=lote,
-                # Solo `data`: sin `notification` no hay texto en el payload y
-                # la app compone el aviso con lo que trae del API.
                 data=mensaje.como_datos(),
+                notification=messaging.Notification(
+                    title="Asiscole Messenger",
+                    body=cuerpo,
+                ),
                 android=messaging.AndroidConfig(
                     priority="high",
-                    # Idempotencia del lado del proveedor: dos entregas del mismo
-                    # message_id se colapsan en una sola notificacion.
                     collapse_key=mensaje.message_id,
+                    notification=messaging.AndroidNotification(
+                        channel_id="asiscole_avisos",
+                        priority="high",
+                        title="Asiscole Messenger",
+                        body=cuerpo,
+                    ),
                 ),
             )
             respuesta = messaging.send_each_for_multicast(peticion)
@@ -143,6 +153,16 @@ class ProveedorFCM(ProveedorPush):
             },
         )
         return ResultadoEnvio(enviados=len(destinos), simulado=True)
+
+
+def _cuerpo_generico(tipo: str) -> str:
+    """Texto visible en la bandeja del sistema; nunca datos del estudiante."""
+    return {
+        "entrada": "Hay un nuevo aviso de ingreso",
+        "salida": "Hay un nuevo aviso de salida",
+        "incidencia": "Hay una nueva incidencia",
+        "aviso": "Tienes un nuevo aviso del colegio",
+    }.get((tipo or "").strip().lower(), "Tienes un nuevo mensaje")
 
 
 def _token_muerto(excepcion: object) -> bool:

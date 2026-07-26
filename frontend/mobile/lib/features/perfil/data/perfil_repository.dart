@@ -61,4 +61,18 @@ class PerfilRepository {
       data: {'documento_estudiante': documento},
     );
   }
+
+  /// Registra o actualiza el token FCM/APNs del dispositivo (RF push).
+  Future<void> registrarPushToken({
+    required String token,
+    required String plataforma,
+  }) async {
+    await _dio.put<void>(
+      '/perfil/push-token',
+      data: {
+        'token': token,
+        'plataforma': plataforma,
+      },
+    );
+  }
 }

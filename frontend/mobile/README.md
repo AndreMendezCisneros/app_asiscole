@@ -1,4 +1,4 @@
-# Asiscole — app del apoderado
+# Asiscole Messenger — app del apoderado
 
 Canal móvil que reemplaza a WhatsApp para avisar al apoderado de entradas, salidas,
 incidencias y avisos. El apoderado es **solo receptor**.

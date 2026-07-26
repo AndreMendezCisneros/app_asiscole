@@ -21,6 +21,8 @@ GoogleService-Info.plist
 service-account*.json
 **/credentials*.json
 **/fcm*.json
+secrets/
+*-firebase-adminsdk-*.json
 
 # Django
 *.sqlite3

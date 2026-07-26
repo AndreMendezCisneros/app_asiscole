@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/di/injector.dart';
+import '../../../core/push/servicio_push.dart';
 import '../domain/mensaje.dart';
 import 'mensajes_cubit.dart';
 
@@ -18,8 +21,29 @@ class MensajesPage extends StatelessWidget {
   }
 }
 
-class _Vista extends StatelessWidget {
+class _Vista extends StatefulWidget {
   const _Vista();
+
+  @override
+  State<_Vista> createState() => _VistaState();
+}
+
+class _VistaState extends State<_Vista> {
+  StreamSubscription<void>? _avisos;
+
+  @override
+  void initState() {
+    super.initState();
+    _avisos = sl<ServicioPush>().avisosDeMensaje.listen((_) {
+      if (mounted) context.read<MensajesCubit>().cargar();
+    });
+  }
+
+  @override
+  void dispose() {
+    _avisos?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

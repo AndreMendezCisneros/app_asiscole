@@ -61,6 +61,9 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
     }
   }
 
+  bool get _hayRegistrosReales =>
+      _dias?.any((d) => d.horaEntrada != null || d.horaSalida != null) ?? false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -86,25 +89,56 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(_error!, textAlign: TextAlign.center),
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: _cargar,
-                  child: ListView.builder(
-                    itemCount: _dias!.length,
-                    itemBuilder: (_, i) {
-                      final d = _dias![i];
-                      return ListTile(
-                        title: Text(d.fecha),
-                        subtitle: Text(_etiqueta(d.estado)),
-                        trailing: Text(
-                          [
-                            if (d.horaEntrada != null) d.horaEntrada!,
-                            if (d.horaSalida != null) '– ${d.horaSalida}',
-                          ].join(' '),
+                  child: !_hayRegistrosReales
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            SizedBox(height: 120),
+                            Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 24),
+                                child: Text(
+                                  'Aún no hay llegadas ni salidas este mes '
+                                  'en el colegio. Cuando el SIE registre una '
+                                  'entrada, aparecerá aquí.',
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          itemCount: _dias!.length,
+                          itemBuilder: (_, i) {
+                            final d = _dias![i];
+                            final tieneHoras =
+                                d.horaEntrada != null || d.horaSalida != null;
+                            if (!tieneHoras &&
+                                d.estado != 'falta' &&
+                                d.estado != 'a_tiempo' &&
+                                d.estado != 'tarde') {
+                              return const SizedBox.shrink();
+                            }
+                            return ListTile(
+                              title: Text(d.fecha),
+                              subtitle: Text(_etiqueta(d.estado)),
+                              trailing: Text(
+                                [
+                                  if (d.horaEntrada != null) d.horaEntrada!,
+                                  if (d.horaSalida != null) '– ${d.horaSalida}',
+                                ].join(' '),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
     );
   }

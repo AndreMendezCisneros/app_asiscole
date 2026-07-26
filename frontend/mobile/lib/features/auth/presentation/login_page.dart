@@ -58,7 +58,7 @@ class _LoginPageState extends State<LoginPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const EncabezadoAsiscole(
-                        titulo: 'Asiscole',
+                        titulo: 'Asiscole Messenger',
                         subtitulo:
                             'Recibe aquí los avisos de entradas, salidas e '
                             'incidencias de tu hijo o hija.',

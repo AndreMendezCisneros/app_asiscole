@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formato.dart';
 import '../../../core/widgets/encabezado_asiscole.dart';
 import '../../../core/widgets/panel_aviso.dart';
@@ -43,6 +44,7 @@ class _EsperandoAprobacionPageState extends State<EsperandoAprobacionPage> {
     final esquema = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: AppTheme.fondo,
       body: SafeArea(
         child: BlocBuilder<AuthCubit, AuthState>(
           builder: (context, estado) {

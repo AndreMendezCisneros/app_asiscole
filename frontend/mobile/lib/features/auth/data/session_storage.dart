@@ -22,14 +22,33 @@ class SessionStorage implements TokenStore {
   static const _clavePerfil = 'perfil';
   static const _claveDeviceId = 'device_id';
 
-  @override
-  Future<String?> leerSessionToken() => _almacen.leer(_claveSessionToken);
+  /// Caché en memoria: evita Keystore en cada request HTTP.
+  String? _sessionCache;
+  String? _dataCache;
+  bool _sessionEnMemoria = false;
+  bool _dataEnMemoria = false;
+  String? _deviceIdCache;
 
   @override
-  Future<String?> leerDataToken() => _almacen.leer(_claveDataToken);
+  Future<String?> leerSessionToken() async {
+    if (_sessionEnMemoria) return _sessionCache;
+    _sessionCache = await _almacen.leer(_claveSessionToken);
+    _sessionEnMemoria = true;
+    return _sessionCache;
+  }
+
+  @override
+  Future<String?> leerDataToken() async {
+    if (_dataEnMemoria) return _dataCache;
+    _dataCache = await _almacen.leer(_claveDataToken);
+    _dataEnMemoria = true;
+    return _dataCache;
+  }
 
   @override
   Future<void> guardarDataToken(String token, DateTime? expiraEn) async {
+    _dataCache = token;
+    _dataEnMemoria = true;
     await _almacen.escribir(_claveDataToken, token);
     await _almacen.escribir(_claveDataExpira, expiraEn?.toIso8601String());
   }
@@ -37,6 +56,10 @@ class SessionStorage implements TokenStore {
   /// Borra los tokens y el perfil. La caché de mensajes no se toca.
   @override
   Future<void> limpiarTokens() async {
+    _sessionCache = null;
+    _dataCache = null;
+    _sessionEnMemoria = true;
+    _dataEnMemoria = true;
     await _almacen.borrar(_claveSessionToken);
     await _almacen.borrar(_claveSessionExpira);
     await _almacen.borrar(_claveDataToken);
@@ -45,6 +68,8 @@ class SessionStorage implements TokenStore {
   }
 
   Future<void> guardarSesion(Sesion sesion) async {
+    _sessionCache = sesion.sessionToken;
+    _sessionEnMemoria = true;
     await _almacen.escribir(_claveSessionToken, sesion.sessionToken);
     await _almacen.escribir(
       _claveSessionExpira,
@@ -88,9 +113,16 @@ class SessionStorage implements TokenStore {
   /// Identificador estable de la instalación. Se crea la primera vez y no
   /// contiene ningún dato personal.
   Future<String> deviceId() async {
+    if (_deviceIdCache != null && _deviceIdCache!.isNotEmpty) {
+      return _deviceIdCache!;
+    }
     final guardado = await _almacen.leer(_claveDeviceId);
-    if (guardado != null && guardado.isNotEmpty) return guardado;
+    if (guardado != null && guardado.isNotEmpty) {
+      _deviceIdCache = guardado;
+      return guardado;
+    }
     final nuevo = InfoDispositivo.generarDeviceId();
+    _deviceIdCache = nuevo;
     await _almacen.escribir(_claveDeviceId, nuevo);
     return nuevo;
   }

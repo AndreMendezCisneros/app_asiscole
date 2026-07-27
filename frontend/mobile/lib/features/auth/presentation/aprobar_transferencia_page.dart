@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/error/error_codes.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/encabezado_asiscole.dart';
 import '../../../core/widgets/panel_aviso.dart';
 import 'auth_cubit.dart';
@@ -48,6 +49,7 @@ class _AprobarTransferenciaPageState extends State<AprobarTransferenciaPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.fondo,
       appBar: AppBar(title: const Text('Solicitud de acceso')),
       body: SafeArea(
         child: SingleChildScrollView(

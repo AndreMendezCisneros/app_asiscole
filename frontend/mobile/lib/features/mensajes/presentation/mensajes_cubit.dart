@@ -23,8 +23,11 @@ class MensajesCubit extends Cubit<MensajesState> {
 
   final MensajesRepository _repo;
 
-  Future<void> cargar() async {
-    emit(MensajesCargando());
+  Future<void> cargar({bool silencioso = false}) async {
+    final habiaLista = state is MensajesListos;
+    if (!silencioso && !habiaLista) {
+      emit(MensajesCargando());
+    }
     try {
       final items = await _repo.sincronizar();
       emit(MensajesListos(items));
@@ -33,15 +36,34 @@ class MensajesCubit extends Cubit<MensajesState> {
         final cache = await _repo.soloCache();
         emit(MensajesListos(cache, offline: true));
       } catch (e) {
-        emit(MensajesError('No se pudieron cargar los mensajes.'));
+        if (!habiaLista) {
+          emit(MensajesError('No se pudieron cargar los mensajes.'));
+        }
       }
     }
   }
 
+  /// Marca leído en UI al instante; persiste en background sin spinner.
   Future<void> abrir(Mensaje mensaje) async {
-    if (!mensaje.leido) {
+    if (mensaje.leido) return;
+
+    final actual = state;
+    if (actual is MensajesListos) {
+      emit(
+        MensajesListos(
+          [
+            for (final m in actual.items)
+              if (m.id == mensaje.id) m.copyWith(leido: true) else m,
+          ],
+          offline: actual.offline,
+        ),
+      );
+    }
+
+    try {
       await _repo.marcarLeidos([mensaje.id]);
-      await cargar();
+    } on Object {
+      // La UI ya mostró leído; un pull-to-refresh sincroniza si falló la red.
     }
   }
 }

@@ -76,6 +76,8 @@ flutter run
 
 - [docs/openapi.yaml](docs/openapi.yaml) — contrato de API `/v0.1/`. Es contract-first:
   ningún cliente consume un endpoint que no esté antes aquí.
+- [frontend/mobile/README.md](frontend/mobile/README.md) — app Flutter (UI de marca,
+  arranque, build del APK **Asiscole Messenger**).
 - [db/legacy/bootstrap_colegio.sql](db/legacy/bootstrap_colegio.sql) — esquema del colegio.
 - [db/migrations](db/migrations) — SQL del canal, aditivo.
 

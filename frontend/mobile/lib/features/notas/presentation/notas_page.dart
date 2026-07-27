@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/di/injector.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/empty_state_asiscole.dart';
+import '../../../core/widgets/fondo_asiscole.dart';
 
 /// Pantalla de Notas (RF-H): visible, desactivada por feature flag remoto.
 class NotasPage extends StatefulWidget {
@@ -47,29 +50,43 @@ class _NotasPageState extends State<NotasPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Notas')),
-      body: Center(
-        child: _cargando
-            ? const CircularProgressIndicator()
-            : _activo
-                ? const Text('El módulo de notas estará disponible aquí.')
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.school_outlined,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Próximamente',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text('Las notas se activarán sin una nueva versión.'),
-                    ],
+      backgroundColor: AppTheme.fondo,
+      body: Stack(
+        children: [
+          const FondoAsiscole(estilo: FondoEstilo.notas),
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Text(
+                    'Notas',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.texto,
+                        ),
                   ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: _cargando
+                        ? const CircularProgressIndicator()
+                        : _activo
+                            ? const EmptyStateAsiscole(
+                                mensaje:
+                                    'El módulo de notas estará disponible aquí.',
+                              )
+                            : const EmptyStateAsiscole(
+                                mensaje:
+                                    'Próximamente\nLas notas se activarán sin una nueva versión.',
+                              ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -45,7 +45,7 @@ class _AsiscoleAppState extends State<AsiscoleApp> {
       }
     });
     _tokenRefresh = push.tokensActualizados.listen((_) => _registrarPushToken());
-    unawaited(_registrarPushToken());
+    // El registro real ocurre cuando ServicioPush emite el token (post-frame).
   }
 
   Future<void> _registrarPushToken() async {

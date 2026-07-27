@@ -4,9 +4,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/connectivity/network_info.dart';
+import '../../../core/di/injector.dart';
 import '../../../core/error/api_error.dart';
 import '../../../core/error/error_codes.dart';
 import '../../../core/session/eventos_sesion.dart';
+import '../../perfil/data/perfil_repository.dart';
 import '../data/auth_repository.dart';
 import '../domain/solicitud_transferencia.dart';
 import 'auth_state.dart';
@@ -227,6 +229,7 @@ class AuthCubit extends Cubit<AuthState> {
 
   Future<void> cerrarSesion() async {
     await _repositorio.cerrarSesion();
+    sl<PerfilRepository>().invalidarCache();
     emit(const Unauthenticated());
   }
 
@@ -249,6 +252,7 @@ class AuthCubit extends Cubit<AuthState> {
 
   Future<void> _sesionInvalidada(ApiError motivo) async {
     await _repositorio.limpiarSesionLocal();
+    sl<PerfilRepository>().invalidarCache();
     if (motivo.codigo == CodigosError.cuentaSuspendida) {
       emit(Suspended(motivo: motivo.mensaje));
       return;

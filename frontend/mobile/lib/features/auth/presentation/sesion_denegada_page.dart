@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/error/error_codes.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/encabezado_asiscole.dart';
 import '../../../core/widgets/panel_aviso.dart';
 import 'auth_cubit.dart';
@@ -16,6 +17,7 @@ class SesionDenegadaPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.fondo,
       body: SafeArea(
         child: BlocBuilder<AuthCubit, AuthState>(
           builder: (context, estado) {

@@ -36,7 +36,7 @@ class Rutas {
 GoRouter crearRouter(AuthCubit auth) {
   return GoRouter(
     initialLocation: Rutas.login,
-    debugLogDiagnostics: kDebugMode,
+    debugLogDiagnostics: false,
     refreshListenable: _EscuchaDeEstado(auth.stream),
     redirect: (context, estado) => _destino(auth.state, estado.matchedLocation),
     routes: [

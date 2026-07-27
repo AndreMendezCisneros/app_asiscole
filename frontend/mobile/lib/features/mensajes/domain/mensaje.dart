@@ -29,6 +29,25 @@ class Mensaje extends Equatable {
   final bool leido;
   final Map<String, dynamic> metadata;
 
+  Mensaje copyWith({
+    bool? entregado,
+    bool? leido,
+  }) {
+    return Mensaje(
+      id: id,
+      tipo: tipo,
+      texto: texto,
+      emitidoEn: emitidoEn,
+      emitidoEnRaw: emitidoEnRaw,
+      colegio: colegio,
+      estudianteId: estudianteId,
+      estudianteNombre: estudianteNombre,
+      entregado: entregado ?? this.entregado,
+      leido: leido ?? this.leido,
+      metadata: metadata,
+    );
+  }
+
   factory Mensaje.fromJson(Map<String, dynamic> json) {
     final crudo = json['emitido_en'] as String;
     return Mensaje(

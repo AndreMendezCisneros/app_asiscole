@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 enum TonoAviso { informacion, advertencia, error, exito }
 
 /// Bloque de aviso reutilizable en las pantallas de sesión.
@@ -19,27 +21,26 @@ class PanelAviso extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final esquema = Theme.of(context).colorScheme;
     final (Color fondo, Color contenido, IconData iconoPorDefecto) =
         switch (tono) {
       TonoAviso.informacion => (
-          esquema.secondaryContainer,
-          esquema.onSecondaryContainer,
+          AppTheme.moradoClaro.withValues(alpha: 0.15),
+          AppTheme.moradoPrincipal,
           Icons.info_outline,
         ),
       TonoAviso.advertencia => (
-          esquema.tertiaryContainer,
-          esquema.onTertiaryContainer,
+          const Color(0xFFF59E0B).withValues(alpha: 0.15),
+          const Color(0xFFB45309),
           Icons.warning_amber_rounded,
         ),
       TonoAviso.error => (
-          esquema.errorContainer,
-          esquema.onErrorContainer,
+          Theme.of(context).colorScheme.errorContainer,
+          Theme.of(context).colorScheme.onErrorContainer,
           Icons.error_outline,
         ),
       TonoAviso.exito => (
-          esquema.primaryContainer,
-          esquema.onPrimaryContainer,
+          AppTheme.celeste.withValues(alpha: 0.15),
+          AppTheme.celeste,
           Icons.check_circle_outline,
         ),
     };
@@ -50,6 +51,7 @@ class PanelAviso extends StatelessWidget {
       decoration: BoxDecoration(
         color: fondo,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borde),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,16 +68,16 @@ class PanelAviso extends StatelessWidget {
                     style: Theme.of(context)
                         .textTheme
                         .titleSmall
-                        ?.copyWith(color: contenido),
+                        ?.copyWith(color: contenido, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                 ],
                 Text(
                   texto,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: contenido, height: 1.35),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.texto,
+                        height: 1.35,
+                      ),
                 ),
               ],
             ),

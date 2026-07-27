@@ -11,6 +11,37 @@ incidencias y avisos. El apoderado es **solo receptor**.
 - Notas visibles y desactivadas por feature flag (`Próximamente`)
 - Perfil multi-hijo y eliminación de cuenta
 - Push: deep-link a mensajes/incidencias y aprobación de transferencia
+- UI de marca (paleta morado/celeste, logo, barra flotante, fondos decorativos)
+
+## Diseño UI (marca Asiscole)
+
+| Token | Color |
+| --- | --- |
+| Morado principal | `#5B21E6` |
+| Morado secundario | `#7C3AED` |
+| Morado claro | `#A855F7` |
+| Celeste | `#22C7F2` |
+| Texto | `#0F172A` |
+| Fondo | `#F8FAFC` |
+
+- Tema central: `lib/core/theme/app_theme.dart`
+- Logo: `assets/brand/logo_asiscole.png` (también icono de launcher)
+- Shell: barra inferior flotante tipo píldora (5 pestañas)
+- Fondos: `FondoAsiscole` con composición distinta por pantalla (`login`, `mensajes`, `asistencias`, `incidencias`, `notas`, `perfil`)
+- Mensajes: búsqueda local, chips Todos / No leídos, detalle solo lectura
+- Asistencias: grid mensual + detalle del día
+- Incidencias: cards cronológicas + sheet de detalle
+- Login / Perfil: header de marca y tipografía alineada a la paleta
+
+No se tocan contratos OpenAPI ni Cubits de negocio en el rediseño visual.
+
+## Rendimiento (buenas prácticas aplicadas)
+
+- Arranque: Firebase/push diferidos al primer frame; TZ con dataset `latest` (no `latest_all`)
+- Logo con `cacheWidth` / `cacheHeight`
+- Tokens de sesión en caché de memoria (menos Keystore por request)
+- Mensajes: marcar leído optimista; búsqueda con debounce; refrescos silenciosos
+- Caché corta de `/perfil` y dedupe del push-token
 
 ## Requisitos
 
@@ -75,6 +106,21 @@ cd frontend/mobile
 | **VPS (default)** | `https://jeanpiaget.asiscole.com/canal-api/v0.1` |
 | Celular + Django local | `.\run_dispositivo.ps1 -Local` |
 | Emulador + Django local | `--dart-define=API_BASE_URL=http://10.0.2.2:8000/v0.1` |
+
+## Generar APK (Asiscole Messenger)
+
+```powershell
+cd frontend/mobile
+flutter pub get
+flutter build apk --release
+```
+
+El artefacto queda en:
+
+`build/app/outputs/flutter-apk/app-release.apk`
+
+Se puede renombrar a `Asiscole_Messenger.apk` para distribución. El nombre visible
+en el dispositivo (launcher) es **Asiscole Messenger** (`AndroidManifest`).
 
 ## Navegación (RF-K)
 

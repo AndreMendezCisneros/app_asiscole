@@ -35,10 +35,24 @@ class PerfilRepository {
   PerfilRepository(this._dio);
   final Dio _dio;
 
-  Future<Perfil> obtener() async {
+  Perfil? _perfilCache;
+  DateTime? _perfilCacheEn;
+  static const _ttlPerfil = Duration(seconds: 45);
+
+  Future<Perfil> obtener({bool forzar = false}) async {
+    final ahora = DateTime.now();
+    if (!forzar &&
+        _perfilCache != null &&
+        _perfilCacheEn != null &&
+        ahora.difference(_perfilCacheEn!) < _ttlPerfil) {
+      return _perfilCache!;
+    }
     try {
       final resp = await _dio.get<Map<String, dynamic>>('/perfil');
-      return Perfil.fromJson(resp.data!);
+      final perfil = Perfil.fromJson(resp.data!);
+      _perfilCache = perfil;
+      _perfilCacheEn = ahora;
+      return perfil;
     } on DioException catch (e) {
       throw ApiError.deDio(e);
     }
@@ -64,10 +78,19 @@ class PerfilRepository {
         '/perfil',
         data: {'estudiante_activo_id': id},
       );
-      return Perfil.fromJson(resp.data!);
+      final perfil = Perfil.fromJson(resp.data!);
+      _perfilCache = perfil;
+      _perfilCacheEn = DateTime.now();
+      return perfil;
     } on DioException catch (e) {
       throw ApiError.deDio(e);
     }
+  }
+
+  void invalidarCache() {
+    _perfilCache = null;
+    _perfilCacheEn = null;
+    _ultimoTokenPush = null;
   }
 
   Future<void> eliminarCuenta(String documento) async {
@@ -76,16 +99,20 @@ class PerfilRepository {
         '/perfil/eliminar-cuenta',
         data: {'documento_estudiante': documento},
       );
+      invalidarCache();
     } on DioException catch (e) {
       throw ApiError.deDio(e);
     }
   }
+
+  String? _ultimoTokenPush;
 
   /// Registra o actualiza el token FCM/APNs del dispositivo (RF push).
   Future<void> registrarPushToken({
     required String token,
     required String plataforma,
   }) async {
+    if (_ultimoTokenPush == token) return;
     try {
       await _dio.put<void>(
         '/perfil/push-token',
@@ -94,6 +121,7 @@ class PerfilRepository {
           'plataforma': plataforma,
         },
       );
+      _ultimoTokenPush = token;
     } on DioException catch (e) {
       throw ApiError.deDio(e);
     }

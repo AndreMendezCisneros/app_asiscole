@@ -16,8 +16,11 @@ incidencias y avisos. El apoderado es **solo receptor**.
 
 - Flutter 3.41 o superior
 - Backend Asiscole en local (`docker compose` + `runserver`)
-- El archivo `android/app/google-services.json` viene en el repo (Firebase cliente).
-  Sin él, Gradle falla en `processDebugGoogleServices`.
+- Para **push FCM** (opcional al compilar): coloca por canal privado
+  - `android/app/google-services.json`
+  - `lib/firebase_options.dart` (o genera con `flutterfire configure`)
+  Hay plantillas `*.example` en esas carpetas. Sin el JSON, la app igual compila
+  (el plugin de Google Services solo se aplica si el archivo existe).
 
 ## Cómo correr
 

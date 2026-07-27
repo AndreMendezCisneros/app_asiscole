@@ -8,7 +8,7 @@ venv/
 .coverage
 htmlcov/
 
-# Entorno y secretos de servidor (nunca en el repo)
+# Entorno y secretos (nunca en el repo)
 .env
 .env.*
 !.env.example
@@ -21,8 +21,11 @@ service-account*.json
 **/fcm*.json
 secrets/
 *-firebase-adminsdk-*.json
-# google-services.json y GoogleService-Info.plist SÍ se versionan:
-# son config de cliente Firebase y hacen falta para compilar la app.
+# Firebase cliente: no versionar claves reales; usar *.example y canal privado
+google-services.json
+GoogleService-Info.plist
+# firebase_options.dart SÍ puede ir al repo solo como stub sin claves reales
+# (las reales viven en secrets/ en la máquina local).
 
 # Django
 *.sqlite3

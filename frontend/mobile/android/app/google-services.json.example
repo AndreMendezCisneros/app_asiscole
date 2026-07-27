@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "829817679027",
-    "project_id": "asiscole-canal",
-    "storage_bucket": "asiscole-canal.firebasestorage.app"
+    "project_number": "TU_PROJECT_NUMBER",
+    "project_id": "tu-proyecto-firebase",
+    "storage_bucket": "tu-proyecto-firebase.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:829817679027:android:76327fb0d23ae2118d14c6",
+        "mobilesdk_app_id": "1:TU_PROJECT_NUMBER:android:TU_APP_ID",
         "android_client_info": {
           "package_name": "pe.asiscole.asiscole_app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAxZesJfU4oqFxMeMfsVyZVPmBog7XAyWg"
+          "current_key": "TU_API_KEY_DE_CLIENTE"
         }
       ],
       "services": {

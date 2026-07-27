@@ -1,0 +1,28 @@
+// Copia este archivo a `lib/firebase_options.dart` tras `flutterfire configure`
+// o pide el archivo real por un canal privado (no lo subas a Git con claves reales).
+// ignore_for_file: type=lint
+import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
+class DefaultFirebaseOptions {
+  static FirebaseOptions get currentPlatform {
+    if (kIsWeb) {
+      throw UnsupportedError('Web no configurado.');
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return android;
+      default:
+        throw UnsupportedError('Plataforma no configurada.');
+    }
+  }
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'TU_API_KEY',
+    appId: '1:TU_PROJECT_NUMBER:android:TU_APP_ID',
+    messagingSenderId: 'TU_PROJECT_NUMBER',
+    projectId: 'tu-proyecto-firebase',
+    storageBucket: 'tu-proyecto-firebase.appspot.com',
+  );
+}

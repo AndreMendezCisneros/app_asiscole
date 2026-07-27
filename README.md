@@ -78,3 +78,24 @@ flutter run
   ningún cliente consume un endpoint que no esté antes aquí.
 - [db/legacy/bootstrap_colegio.sql](db/legacy/bootstrap_colegio.sql) — esquema del colegio.
 - [db/migrations](db/migrations) — SQL del canal, aditivo.
+
+## Producción (VPS Jean Piaget)
+
+El backend del canal corre en el mismo VPS que SIE JP, detrás de Caddy:
+
+| Recurso | URL |
+| --- | --- |
+| Health | https://jeanpiaget.asiscole.com/canal-api/health |
+| API / Swagger | https://jeanpiaget.asiscole.com/canal-api/v0.1/docs/ |
+| Ingesta (SIE → canal) | `POST …/canal-api/v0.1/ingesta/eventos` |
+
+Compose de producción: `docker-compose.prod.yml` (Redis + gunicorn + Celery).  
+La app Flutter en **release** usa `https://jeanpiaget.asiscole.com/canal-api/v0.1`
+(ver `frontend/mobile/lib/core/config/env.dart`).
+
+Flujo:
+
+1. El colegio registra llegada/salida/incidencia en SIE JP.
+2. SIE hace `POST` de ingesta al canal (ya no WhatsApp/WPP).
+3. El backend crea el mensaje y notifica por push (FCM) si el dispositivo está registrado.
+4. El apoderado abre Asiscole Messenger y ve la bandeja vía HTTPS al VPS.

@@ -6,13 +6,18 @@ import 'package:flutter/foundation.dart';
 ///
 /// El valor puede sobrescribirse en tiempo de compilación:
 /// `flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000/v0.1`
+///
+/// Producción (release APK): backend en el VPS de Jean Piaget
+/// `https://jeanpiaget.asiscole.com/canal-api/v0.1`
 class Env {
   const Env._();
 
   static const String _baseUrlDefinida =
       String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
-  static const String _produccion = 'https://api.asiscole.pe/v0.1';
+  /// Backend del canal en el VPS (Caddy → Django en :8000).
+  static const String _produccion =
+      'https://jeanpiaget.asiscole.com/canal-api/v0.1';
 
   /// Celular físico en la misma Wi‑Fi que el PC de desarrollo.
   /// Si usas emulador Android, lanza con:

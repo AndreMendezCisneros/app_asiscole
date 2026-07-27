@@ -1,0 +1,72 @@
+# Producción en VPS — BD central = Supabase (no Postgres local).
+# Puerto solo en localhost; Caddy hace TLS en jeanpiaget.asiscole.com/canal-api
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: asiscole_canal_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - canal_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: asiscole_canal_backend
+    command: >
+      gunicorn config.wsgi:application
+      --bind 0.0.0.0:8000
+      --workers 2
+      --threads 2
+      --timeout 90
+      --access-logfile -
+      --error-logfile -
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      USE_LOCMEM_CACHE: "False"
+      POLL_OUTBOX_INLINE: "False"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./secrets:/secrets:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    container_name: asiscole_canal_worker
+    command: celery -A config worker -l info
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      USE_LOCMEM_CACHE: "False"
+    volumes:
+      - ./secrets:/secrets:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  beat:
+    build: ./backend
+    container_name: asiscole_canal_beat
+    command: celery -A config beat -l info
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      USE_LOCMEM_CACHE: "False"
+    volumes:
+      - ./secrets:/secrets:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  canal_redis_data:

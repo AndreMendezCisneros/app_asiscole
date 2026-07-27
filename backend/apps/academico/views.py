@@ -77,3 +77,21 @@ class IncidenciaDetalleView(APIView):
                 estudiante_id=_estudiante_id(request),
             )
         )
+
+
+class IncidenciaConfirmarView(APIView):
+    authentication_classes = [DataTokenAuthentication]
+    permission_classes = [EsApoderadoConDataToken]
+
+    @extend_schema(
+        tags=["incidencias"],
+        parameters=[OpenApiParameter("estudiante_id", int, required=True)],
+        responses={204: None},
+    )
+    def post(self, request: Request, id: int) -> Response:
+        services.confirmar_incidencia(
+            request.apoderado,
+            incidencia_id=id,
+            estudiante_id=_estudiante_id(request),
+        )
+        return Response(status=204)

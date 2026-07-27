@@ -21,29 +21,31 @@ class PanelAviso extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (Color fondo, Color contenido, IconData iconoPorDefecto) =
-        switch (tono) {
+    final (Color fondo, Color acento, IconData iconoPorDefecto) = switch (tono) {
       TonoAviso.informacion => (
           AppTheme.moradoClaro.withValues(alpha: 0.15),
           AppTheme.moradoPrincipal,
           Icons.info_outline,
         ),
       TonoAviso.advertencia => (
-          const Color(0xFFF59E0B).withValues(alpha: 0.15),
-          const Color(0xFFB45309),
+          const Color(0xFFF59E0B).withValues(alpha: 0.18),
+          const Color(0xFF92400E),
           Icons.warning_amber_rounded,
         ),
       TonoAviso.error => (
-          Theme.of(context).colorScheme.errorContainer,
-          Theme.of(context).colorScheme.onErrorContainer,
+          const Color(0xFFFEE2E2),
+          const Color(0xFF991B1B),
           Icons.error_outline,
         ),
       TonoAviso.exito => (
           AppTheme.celeste.withValues(alpha: 0.15),
-          AppTheme.celeste,
+          const Color(0xFF0E7490),
           Icons.check_circle_outline,
         ),
     };
+
+    // Texto siempre oscuro para legibilidad sobre fondos claros/decorativos.
+    const Color textoCuerpo = AppTheme.texto;
 
     return Container(
       width: double.infinity,
@@ -56,7 +58,7 @@ class PanelAviso extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icono ?? iconoPorDefecto, color: contenido, size: 22),
+          Icon(icono ?? iconoPorDefecto, color: acento, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -65,18 +67,19 @@ class PanelAviso extends StatelessWidget {
                 if (titulo != null) ...[
                   Text(
                     titulo!,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(color: contenido, fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: textoCuerpo,
+                          fontWeight: FontWeight.w800,
+                        ),
                   ),
                   const SizedBox(height: 4),
                 ],
                 Text(
                   texto,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.texto,
+                        color: textoCuerpo,
                         height: 1.35,
+                        fontWeight: FontWeight.w600,
                       ),
                 ),
               ],

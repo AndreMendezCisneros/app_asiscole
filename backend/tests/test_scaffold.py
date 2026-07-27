@@ -18,6 +18,17 @@ def test_localizacion_peruana():
     assert settings.USE_TZ is True
 
 
+def test_health_incluye_fcm_disponible(api):
+    import json
+
+    resp = api.get("/health")
+    assert resp.status_code == 200
+    cuerpo = json.loads(resp.content.decode("utf-8"))
+    assert cuerpo["status"] == "ok"
+    assert "fcm_disponible" in cuerpo
+    assert isinstance(cuerpo["fcm_disponible"], bool)
+
+
 def test_bd_central_y_router_configurados():
     # En produccion la BD central es PostgreSQL. Bajo pytest la conexion
     # `default` se sustituye por SQLite en memoria (ver config/settings.py), asi
@@ -129,6 +140,9 @@ def test_constantes_del_srs_presentes():
         "LOGIN_MAX_ATTEMPTS",
         "LOGIN_ATTEMPT_WINDOW_MINUTES",
         "LOGIN_LOCKOUT_MINUTES",
+        "LOGIN_LOCKOUT_ESCALATED_MINUTES",
+        "LOGIN_HARD_MAX_ATTEMPTS",
+        "LOGIN_HARD_LOCKOUT_MINUTES",
         "TRANSFER_MAX_PER_HOUR",
         "MESSAGE_RETENTION_MONTHS",
         "DIRECTORY_CACHE_TTL_SECONDS",

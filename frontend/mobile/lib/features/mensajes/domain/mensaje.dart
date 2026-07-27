@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:equatable/equatable.dart';
+
+import '../../../core/util/formato.dart';
 
 /// Mensaje ya renderizado por el backend. La app solo lo muestra.
 class Mensaje extends Equatable {
@@ -20,7 +24,6 @@ class Mensaje extends Equatable {
   final String tipo;
   final String texto;
   final DateTime emitidoEn;
-  /// Valor exacto de `emitido_en` del API (para caché / `since`).
   final String? emitidoEnRaw;
   final String? colegio;
   final int? estudianteId;
@@ -29,10 +32,7 @@ class Mensaje extends Equatable {
   final bool leido;
   final Map<String, dynamic> metadata;
 
-  Mensaje copyWith({
-    bool? entregado,
-    bool? leido,
-  }) {
+  Mensaje copyWith({bool? entregado, bool? leido}) {
     return Mensaje(
       id: id,
       tipo: tipo,
@@ -57,7 +57,7 @@ class Mensaje extends Equatable {
       colegio: json['colegio'] as String?,
       estudianteId: json['estudiante_id'] as int?,
       estudianteNombre: json['estudiante_nombre'] as String?,
-      emitidoEn: DateTime.parse(crudo),
+      emitidoEn: parseInstanteApi(crudo),
       emitidoEnRaw: crudo,
       entregado: json['entregado'] as bool? ?? false,
       leido: json['leido'] as bool? ?? false,
@@ -72,15 +72,27 @@ class Mensaje extends Equatable {
         'colegio': colegio,
         'estudiante_id': estudianteId,
         'estudiante_nombre': estudianteNombre,
-        // Misma cadena que mandó el API (con offset). Evita reescribir a UTC/Z
-        // y romper marcas de sincronización si se vuelve a usar `since`.
-        'emitido_en': emitidoEnRaw ?? emitidoEn.toIso8601String(),
+        'emitido_en': emitidoEn.toUtc().toIso8601String(),
         'entregado': entregado,
         'leido': leido,
         'metadata': metadata,
       };
 
   factory Mensaje.fromLocal(Map<String, Object?> row) {
+    Map<String, dynamic> meta = const {};
+    final crudoMeta = row['metadata'];
+    if (crudoMeta is String && crudoMeta.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(crudoMeta);
+        if (decoded is Map) {
+          meta = Map<String, dynamic>.from(decoded);
+        }
+      } on Object {
+        meta = const {};
+      }
+    } else if (crudoMeta is Map) {
+      meta = Map<String, dynamic>.from(crudoMeta);
+    }
     return Mensaje(
       id: row['id']! as String,
       tipo: row['tipo']! as String,
@@ -88,13 +100,14 @@ class Mensaje extends Equatable {
       colegio: row['colegio'] as String?,
       estudianteId: row['estudiante_id'] as int?,
       estudianteNombre: row['estudiante_nombre'] as String?,
-      emitidoEn: DateTime.parse(row['emitido_en']! as String),
+      emitidoEn: parseInstanteApi(row['emitido_en']! as String),
+      emitidoEnRaw: row['emitido_en'] as String?,
       entregado: (row['entregado'] as int? ?? 0) == 1,
       leido: (row['leido'] as int? ?? 0) == 1,
-      metadata: const {},
+      metadata: meta,
     );
   }
 
   @override
-  List<Object?> get props => [id, leido, emitidoEn];
+  List<Object?> get props => [id, leido, emitidoEn, entregado];
 }

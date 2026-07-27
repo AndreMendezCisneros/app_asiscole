@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formato.dart';
 import '../../../core/widgets/asiscole_logo.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
+import '../../../core/widgets/tour_asiscole.dart';
 import '../../auth/presentation/auth_cubit.dart';
 import '../data/perfil_repository.dart';
 
@@ -26,6 +27,35 @@ class _PerfilPageState extends State<PerfilPage> {
   void initState() {
     super.initState();
     _cargar();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      TourAsiscole.mostrarSiCorresponde(
+        context,
+        seccion: 'perfil',
+        titulo: GuiasTour.perfil.titulo,
+        cuerpo: GuiasTour.perfil.cuerpo,
+      );
+    });
+  }
+
+  Future<void> _verGuiaDeNuevo() async {
+    await TourAsiscole.resetearTodo();
+    if (!mounted) return;
+    await TourAsiscole.mostrarSiCorresponde(
+      context,
+      seccion: 'perfil',
+      titulo: GuiasTour.perfil.titulo,
+      cuerpo: GuiasTour.perfil.cuerpo,
+      forzar: true,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Guía reiniciada. Al abrir cada sección verás el tip otra vez.',
+        ),
+      ),
+    );
   }
 
   Future<void> _cargar() async {
@@ -222,6 +252,37 @@ class _PerfilPageState extends State<PerfilPage> {
                                     onTap: () => _seleccionar(e),
                                   ),
                                 ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          _CardGrupo(
+                            titulo: 'Ayuda',
+                            children: [
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.menu_book_outlined,
+                                  color: AppTheme.moradoSecundario,
+                                ),
+                                title: const Text(
+                                  'Guía de uso',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.texto,
+                                  ),
+                                ),
+                                subtitle: const Text(
+                                  'Ver de nuevo los tips de cada sección',
+                                  style: TextStyle(
+                                    color: AppTheme.textoSecundario,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                trailing: const Icon(
+                                  Icons.chevron_right,
+                                  color: AppTheme.moradoSecundario,
+                                ),
+                                onTap: _verGuiaDeNuevo,
+                              ),
                             ],
                           ),
                           const SizedBox(height: 14),

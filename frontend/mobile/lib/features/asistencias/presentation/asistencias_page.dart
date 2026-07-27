@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/di/injector.dart';
 import '../../../core/error/api_error.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/chip_hijo_activo.dart';
 import '../../../core/widgets/day_status_badge.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
+import '../../../core/widgets/tour_asiscole.dart';
 import '../../perfil/data/perfil_repository.dart';
 import '../data/asistencias_api.dart';
 
@@ -25,6 +31,7 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
   bool _cargando = true;
   late DateTime _mes = DateTime(DateTime.now().year, DateTime.now().month);
   DateTime? _seleccionado;
+  EstudianteVinculado? _hijo;
 
   @override
   void initState() {
@@ -32,6 +39,15 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
     final hoy = DateTime.now();
     _seleccionado = DateTime(hoy.year, hoy.month, hoy.day);
     _cargar();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      TourAsiscole.mostrarSiCorresponde(
+        context,
+        seccion: 'asistencias',
+        titulo: GuiasTour.asistencias.titulo,
+        cuerpo: GuiasTour.asistencias.cuerpo,
+      );
+    });
   }
 
   Future<void> _cargar() async {
@@ -40,12 +56,22 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
       _error = null;
     });
     try {
-      final perfil = await sl<PerfilRepository>().obtener();
+      final repo = sl<PerfilRepository>();
+      final perfil = await repo.obtener();
+      final hijos = await repo.estudiantes();
       final id = perfil.estudianteActivoId;
+      EstudianteVinculado? hijo;
+      for (final h in hijos) {
+        if (h.activo || h.id == id) {
+          hijo = h;
+          break;
+        }
+      }
       if (id == null) {
         setState(() {
           _error = 'Selecciona un estudiante en Perfil.';
           _cargando = false;
+          _hijo = hijo;
         });
         return;
       }
@@ -56,6 +82,7 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
       );
       setState(() {
         _dias = dias;
+        _hijo = hijo;
         _porFecha = {
           for (final d in dias) d.fecha: d,
         };
@@ -98,6 +125,11 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
           d.estado == 'tarde') ??
       false;
 
+  int get _countATiempo =>
+      _dias?.where((d) => d.estado == 'a_tiempo').length ?? 0;
+  int get _countTarde => _dias?.where((d) => d.estado == 'tarde').length ?? 0;
+  int get _countFalta => _dias?.where((d) => d.estado == 'falta').length ?? 0;
+
   DiaAsistencia? get _diaSeleccionado {
     final s = _seleccionado;
     if (s == null) return null;
@@ -124,7 +156,7 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
             child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
               child: Row(
                 children: [
                   Expanded(
@@ -139,6 +171,31 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
                   ),
                 ],
               ),
+            ),
+            if (_hijo != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ChipHijoActivo(
+                    nombre: _hijo!.nombre,
+                    detalle: '${_hijo!.grado} ${_hijo!.seccion}'.trim(),
+                    onCambiar: () => context.go(Rutas.perfil),
+                  ),
+                ),
+              ),
+            if (_hayRegistrosReales && !_cargando && _error == null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: _ResumenMes(
+                  aTiempo: _countATiempo,
+                  tarde: _countTarde,
+                  falta: _countFalta,
+                ),
+              ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: _LeyendaAsistencia(),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -214,9 +271,10 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
                               if (!_hayRegistrosReales)
                                 const EmptyStateAsiscole(
                                   mensaje:
-                                      'Aún no hay llegadas ni salidas este mes '
-                                      'en el colegio. Cuando el SIE registre una '
-                                      'entrada, aparecerá aquí.',
+                                      'Todavía no hay llegadas ni salidas este mes. '
+                                      'Cuando el colegio registre una entrada o '
+                                      'salida, el día se marcará en el calendario '
+                                      'y verás el detalle aquí abajo.',
                                   mostrarLogo: false,
                                 )
                               else
@@ -336,13 +394,24 @@ class _CalendarioMes extends StatelessWidget {
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 150),
-              width: 36,
-              height: 36,
+              width: sel ? 40 : 36,
+              height: sel ? 40 : 36,
               decoration: BoxDecoration(
                 color: sel ? AppTheme.moradoPrincipal : Colors.transparent,
                 shape: BoxShape.circle,
-                border: !sel && borde != null
-                    ? Border.all(color: borde, width: 2)
+                border: sel
+                    ? Border.all(color: AppTheme.celeste, width: 3)
+                    : (borde != null
+                        ? Border.all(color: borde, width: 2)
+                        : null),
+                boxShadow: sel
+                    ? [
+                        BoxShadow(
+                          color: AppTheme.moradoPrincipal.withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
                     : null,
               ),
               alignment: Alignment.center,
@@ -351,7 +420,7 @@ class _CalendarioMes extends StatelessWidget {
                 style: TextStyle(
                   color: sel ? Colors.white : AppTheme.texto,
                   fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
-                  fontSize: 14,
+                  fontSize: sel ? 15 : 14,
                 ),
               ),
             ),
@@ -503,6 +572,97 @@ class _MiniCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LeyendaAsistencia extends StatelessWidget {
+  const _LeyendaAsistencia();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget item(Color c, String t) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              t,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textoSecundario,
+              ),
+            ),
+          ],
+        );
+    return Wrap(
+      spacing: 14,
+      runSpacing: 6,
+      children: [
+        item(AppTheme.celeste, 'A tiempo'),
+        item(AppTheme.ambar, 'Tarde'),
+        item(AppTheme.moradoPrincipal, 'Falta'),
+      ],
+    );
+  }
+}
+
+class _ResumenMes extends StatelessWidget {
+  const _ResumenMes({
+    required this.aTiempo,
+    required this.tarde,
+    required this.falta,
+  });
+
+  final int aTiempo;
+  final int tarde;
+  final int falta;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget cell(String label, int n, Color color) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.blanco,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.borde),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  '$n',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textoSecundario,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+    return Row(
+      children: [
+        cell('A tiempo', aTiempo, AppTheme.celeste),
+        const SizedBox(width: 8),
+        cell('Tarde', tarde, AppTheme.ambar),
+        const SizedBox(width: 8),
+        cell('Faltas', falta, AppTheme.moradoPrincipal),
+      ],
     );
   }
 }

@@ -6,6 +6,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
+import '../../../core/widgets/tour_asiscole.dart';
 
 /// Pantalla de Notas (RF-H): visible, desactivada por feature flag remoto.
 class NotasPage extends StatefulWidget {
@@ -23,6 +24,15 @@ class _NotasPageState extends State<NotasPage> {
   void initState() {
     super.initState();
     _cargar();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      TourAsiscole.mostrarSiCorresponde(
+        context,
+        seccion: 'notas',
+        titulo: GuiasTour.notas.titulo,
+        cuerpo: GuiasTour.notas.cuerpo,
+      );
+    });
   }
 
   Future<void> _cargar() async {

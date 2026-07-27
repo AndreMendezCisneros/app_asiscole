@@ -125,3 +125,18 @@ en el dispositivo (launcher) es **Asiscole Messenger** (`AndroidManifest`).
 ## Navegación (RF-K)
 
 Mensajes · Asistencias · Incidencias · Notas · Perfil
+
+## Consumo de datos (pruebas)
+
+En **debug**, Dio registra un acumulado aproximado de bytes (`api.bytes` en el
+log): solo tamaños / `Content-Length`, sin cuerpos ni PII.
+
+Recomendación de prueba:
+
+1. Arranque en frío con Wi‑Fi → anotar `enviados` / `recibidos` tras abrir Mensajes.
+2. Repetir en datos móviles tras un sync previo (debe bajar gracias a `since` +
+   caché de `/perfil`).
+3. Evitar pull-to-refresh continuo: la sync incremental no re-baja toda la bandeja
+   si ya hay mensajes en SQLite (margen de 6 h sobre la última marca).
+
+Push lento (horas): ver [docs/diagnostico-push.md](../../docs/diagnostico-push.md).

@@ -9,10 +9,12 @@ from apps.cuentas.models import CUENTA_SUSPENDIDA, Apoderado
 
 
 @pytest.mark.django_db
-def test_feature_flags_incluye_notas():
+def test_feature_flags_incluye_notas_y_citacion():
     flags = listar_flags()
     assert "notas" in flags
     assert flags["notas"] is False
+    assert "citacion" in flags
+    assert flags["citacion"] is False
 
 
 @pytest.mark.django_db

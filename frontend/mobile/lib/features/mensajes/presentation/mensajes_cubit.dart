@@ -25,8 +25,17 @@ class MensajesCubit extends Cubit<MensajesState> {
 
   Future<void> cargar({bool silencioso = false}) async {
     final habiaLista = state is MensajesListos;
-    if (!silencioso && !habiaLista) {
-      emit(MensajesCargando());
+    if (!habiaLista) {
+      try {
+        final cache = await _repo.soloCache();
+        if (cache.isNotEmpty) {
+          emit(MensajesListos(cache));
+        } else if (!silencioso) {
+          emit(MensajesCargando());
+        }
+      } catch (_) {
+        if (!silencioso) emit(MensajesCargando());
+      }
     }
     try {
       final items = await _repo.sincronizar();
@@ -36,7 +45,7 @@ class MensajesCubit extends Cubit<MensajesState> {
         final cache = await _repo.soloCache();
         emit(MensajesListos(cache, offline: true));
       } catch (e) {
-        if (!habiaLista) {
+        if (state is! MensajesListos) {
           emit(MensajesError('No se pudieron cargar los mensajes.'));
         }
       }

@@ -184,6 +184,73 @@ def test_el_bloqueo_alcanza_al_documento_correcto(api, vinculo_en_directorio, se
     assert respuesta.status_code == 423
 
 
+def test_bloqueo_escala_a_diez_minutos_tras_desbloqueo(
+    vinculo_en_directorio, settings, monkeypatch
+):
+    """Tras el primer bloqueo (5 min), el siguiente fallo escala a 10 min."""
+    from django.core.cache import cache
+
+    from apps.cuentas import rate_limit
+
+    settings.LOGIN_MAX_ATTEMPTS = 3
+    settings.LOGIN_LOCKOUT_MINUTES = 5
+    settings.LOGIN_LOCKOUT_ESCALATED_MINUTES = 10
+    settings.LOGIN_HARD_MAX_ATTEMPTS = 8
+    settings.LOGIN_HARD_LOCKOUT_MINUTES = 1440
+
+    minutos: list[int] = []
+    original = rate_limit._activar_bloqueo
+
+    def _espiar(clave_bloqueo, fallos, motivo):
+        minutos.append(rate_limit._minutos_bloqueo(fallos))
+        original(clave_bloqueo, fallos, motivo)
+
+    monkeypatch.setattr(rate_limit, "_activar_bloqueo", _espiar)
+
+    cred = rate_limit.clave_credencial(TELEFONO, "00000000")
+
+    for _ in range(3):
+        rate_limit.registrar_fallo_login(cred)
+    assert minutos == [5]
+
+    cache.delete(rate_limit._clave_bloqueo(cred))
+    rate_limit.registrar_fallo_login(cred)
+    assert minutos == [5, 10]
+
+
+def test_bloqueo_largo_tras_ocho_fallos_acumulados(
+    vinculo_en_directorio, settings, monkeypatch
+):
+    """~8 fallos acumulados en la ventana disparan el bloqueo de 24 h."""
+    from django.core.cache import cache
+
+    from apps.cuentas import rate_limit
+
+    settings.LOGIN_MAX_ATTEMPTS = 3
+    settings.LOGIN_LOCKOUT_MINUTES = 5
+    settings.LOGIN_LOCKOUT_ESCALATED_MINUTES = 10
+    settings.LOGIN_HARD_MAX_ATTEMPTS = 8
+    settings.LOGIN_HARD_LOCKOUT_MINUTES = 1440
+
+    minutos: list[int] = []
+    original = rate_limit._activar_bloqueo
+
+    def _espiar(clave_bloqueo, fallos, motivo):
+        minutos.append(rate_limit._minutos_bloqueo(fallos))
+        original(clave_bloqueo, fallos, motivo)
+
+    monkeypatch.setattr(rate_limit, "_activar_bloqueo", _espiar)
+
+    cred = rate_limit.clave_credencial(TELEFONO, "00000000")
+
+    for _ in range(8):
+        cache.delete(rate_limit._clave_bloqueo(cred))
+        rate_limit.registrar_fallo_login(cred)
+
+    assert 1440 in minutos
+    assert minutos[-1] == 1440
+
+
 def test_los_intentos_no_guardan_datos_personales(api, vinculo_en_directorio):
     """`asis_intento_login.clave` es un hash: nunca el telefono ni el documento."""
     api.post(URL_LOGIN, cuerpo_login(documento_estudiante="00000000"), format="json")

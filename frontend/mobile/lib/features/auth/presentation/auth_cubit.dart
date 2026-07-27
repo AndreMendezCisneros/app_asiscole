@@ -42,7 +42,7 @@ class AuthCubit extends Cubit<AuthState> {
       return;
     }
 
-    final perfil = await _repositorio.perfilGuardado();
+    var perfil = await _repositorio.perfilGuardado();
     if (perfil != null && perfil.estaSuspendido) {
       await _repositorio.limpiarSesionLocal();
       emit(Suspended(motivo: perfil.motivoSuspension));
@@ -55,11 +55,39 @@ class AuthCubit extends Cubit<AuthState> {
       return;
     }
 
+    try {
+      await _repositorio.refrescarDatosAlArranque();
+    } on ApiError catch (e) {
+      if (e.codigo == CodigosError.sesionExpirada ||
+          e.codigo == CodigosError.noAutenticado) {
+        emit(Unauthenticated(codigoError: e.codigo, mensaje: e.mensaje));
+        return;
+      }
+      // Fallo de red u otro: si hay perfil cacheado, seguimos; si no, intentamos
+      // recuperar perfil más abajo.
+    } catch (_) {
+      // Misma política: no borrar sesión solo por un fallo puntual.
+    }
+
     if (perfil == null) {
-      // Hay token pero no perfil cacheado: se vuelve a pedir credenciales.
-      await _repositorio.limpiarSesionLocal();
-      emit(const Unauthenticated());
-      return;
+      try {
+        perfil = await sl<PerfilRepository>().obtener(forzar: true);
+        await _repositorio.guardarPerfil(perfil);
+      } on ApiError catch (e) {
+        if (e.codigo == CodigosError.sesionExpirada ||
+            e.codigo == CodigosError.noAutenticado) {
+          await _repositorio.limpiarSesionLocal();
+          emit(Unauthenticated(codigoError: e.codigo, mensaje: e.mensaje));
+          return;
+        }
+        await _repositorio.limpiarSesionLocal();
+        emit(const Unauthenticated());
+        return;
+      } catch (_) {
+        await _repositorio.limpiarSesionLocal();
+        emit(const Unauthenticated());
+        return;
+      }
     }
 
     emit(OnlineSync(perfil));

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/device/info_dispositivo.dart';
 import '../../../core/error/api_error.dart';
+import '../../../core/error/error_codes.dart';
 import '../domain/perfil.dart';
 import '../domain/sesion.dart';
 import '../domain/solicitud_transferencia.dart';
@@ -82,6 +83,29 @@ class AuthRepository {
       // Renovar es oportunista: si falla, la sesión vigente sigue sirviendo.
     }
   }
+
+  /// Al arranque: renueva el `data_token` con el `session_token` vigente.
+  ///
+  /// No borra la sesión si falla por red; sí si el backend indica sesión
+  /// expirada o no autenticada.
+  Future<void> refrescarDatosAlArranque() async {
+    try {
+      final emitido = await _api.refrescarDatos();
+      await _almacen.guardarDataToken(emitido.dataToken, emitido.dataExpiraEn);
+    } on DioException catch (e) {
+      final error = ApiError.deDio(e);
+      if (error.codigo == CodigosError.sesionExpirada ||
+          error.codigo == CodigosError.noAutenticado ||
+          error.statusCode == 410 ||
+          error.statusCode == 401) {
+        await _almacen.limpiarTokens();
+        throw error;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> guardarPerfil(Perfil perfil) => _almacen.guardarPerfil(perfil);
 
   /// Cierra sesión en el backend y borra los tokens. La caché de mensajes
   /// permanece, es del apoderado.

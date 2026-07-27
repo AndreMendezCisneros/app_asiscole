@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
+from datetime import timezone as dt_timezone
 
 from django.db.models import Count, Q, QuerySet
 from django.utils import timezone
@@ -33,6 +34,32 @@ def _codificar_cursor(momento: datetime) -> str:
     return base64.urlsafe_b64encode(momento.isoformat().encode("utf-8")).decode("ascii")
 
 
+def _emitido_iso(momento: datetime) -> str:
+    """ISO-8601 en UTC con `Z` para que el cliente no lo lea como hora local."""
+    if timezone.is_naive(momento):
+        # Legacy: columna `timestamp without time zone` con reloj UTC.
+        utc = timezone.make_aware(momento, dt_timezone.utc)
+    else:
+        lima = timezone.get_current_timezone()
+        tz_key = getattr(getattr(momento, "tzinfo", None), "key", None)
+        es_lima = tz_key == "America/Lima" or momento.tzinfo == lima
+        if es_lima:
+            # Django etiqueta el naive UTC de Postgres como America/Lima (+5 h).
+            utc = datetime(
+                momento.year,
+                momento.month,
+                momento.day,
+                momento.hour,
+                momento.minute,
+                momento.second,
+                momento.microsecond,
+                tzinfo=dt_timezone.utc,
+            )
+        else:
+            utc = momento.astimezone(dt_timezone.utc)
+    return utc.isoformat().replace("+00:00", "Z")
+
+
 def _serializar(mensaje: Mensaje) -> dict:
     meta = mensaje.metadata or {}
     return {
@@ -42,7 +69,7 @@ def _serializar(mensaje: Mensaje) -> dict:
         "colegio": mensaje.tenant_id,
         "estudiante_id": mensaje.id_estudiante,
         "estudiante_nombre": meta.get("estudiante_nombre"),
-        "emitido_en": mensaje.emitido_en.isoformat(),
+        "emitido_en": _emitido_iso(mensaje.emitido_en),
         "entregado": mensaje.entregado,
         "leido": mensaje.leido,
         "metadata": meta,

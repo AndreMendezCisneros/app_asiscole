@@ -1,4 +1,8 @@
-"""Consultas de asistencia e incidencias contra la BD del colegio (solo lectura)."""
+"""Consultas de asistencia e incidencias contra la BD del colegio (solo lectura).
+
+Las confirmaciones de incidencia viven en la BD central
+(`asis_confirmacion_incidencia`) y se fusionan al listar/detallar.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +14,7 @@ from django.utils import timezone
 from apps.academico.authz import vinculo_estudiante
 from apps.academico.models import EvidenciaFotografica, Incidencia, RegistroLlegada
 from apps.common.errors import StudentLinkNotFound, UpstreamSchoolDbUnavailable
-from apps.cuentas.models import Apoderado
+from apps.cuentas.models import Apoderado, ConfirmacionIncidencia
 from apps.directorio import circuit_breaker
 from config.db_router import tenant_alias
 
@@ -26,6 +30,31 @@ def _mapear_estado(estado_colegio: str) -> str:
     if valor == "tarde":
         return "tarde"
     return "sin_registro"
+
+
+def _mapa_confirmaciones(
+    apoderado: Apoderado, *, tenant_id: str, ids: list[int]
+) -> dict[int, ConfirmacionIncidencia]:
+    """Índice id_incidencia_colegio → fila de confirmación en BD central."""
+    if not ids:
+        return {}
+    filas = ConfirmacionIncidencia.objects.filter(
+        apoderado=apoderado,
+        tenant_id=tenant_id,
+        id_incidencia_colegio__in=ids,
+    )
+    return {f.id_incidencia_colegio: f for f in filas}
+
+
+def _flags_confirmacion(
+    confirmacion: ConfirmacionIncidencia | None,
+) -> dict:
+    if confirmacion is None:
+        return {"confirmada": False, "confirmada_en": None}
+    return {
+        "confirmada": True,
+        "confirmada_en": confirmacion.confirmada_en.isoformat(),
+    }
 
 
 def agenda_mensual(
@@ -109,6 +138,11 @@ def listar_incidencias(
             qs = qs.filter(fecha_hora_registro__date__gte=desde)
         if hasta:
             qs = qs.filter(fecha_hora_registro__date__lte=hasta)
+        filas = list(qs[:200])
+        ids = [i.pk for i in filas]
+        confirmaciones = _mapa_confirmaciones(
+            apoderado, tenant_id=vinculo.tenant_id, ids=ids
+        )
         items = [
             {
                 "id": i.pk,
@@ -118,8 +152,9 @@ def listar_incidencias(
                 "es_grave": i.falta.es_grave,
                 "tiene_evidencia": i.estado_evidencia == "Con evidencia",
                 "reportado_por": i.usuario_registro.nombre_completo,
+                **_flags_confirmacion(confirmaciones.get(i.pk)),
             }
-            for i in qs[:200]
+            for i in filas
         ]
     except Exception as exc:  # noqa: BLE001
         circuit_breaker.registrar_fallo(vinculo.tenant_id)
@@ -156,6 +191,12 @@ def detalle_incidencia(
         circuit_breaker.registrar_fallo(vinculo.tenant_id)
         raise UpstreamSchoolDbUnavailable() from exc
     circuit_breaker.registrar_exito(vinculo.tenant_id)
+
+    confirmacion = ConfirmacionIncidencia.objects.filter(
+        apoderado=apoderado,
+        tenant_id=vinculo.tenant_id,
+        id_incidencia_colegio=incidencia.pk,
+    ).first()
     return {
         "id": incidencia.pk,
         "fecha": incidencia.fecha_hora_registro.isoformat(),
@@ -166,4 +207,40 @@ def detalle_incidencia(
         "reportado_por": incidencia.usuario_registro.nombre_completo,
         "observaciones": incidencia.observaciones,
         "evidencias": evidencias,
+        **_flags_confirmacion(confirmacion),
     }
+
+
+def confirmar_incidencia(
+    apoderado: Apoderado, *, incidencia_id: int, estudiante_id: int
+) -> None:
+    """Marca la incidencia como confirmada en la BD central (idempotente).
+
+    Verifica que la incidencia exista y pertenezca al estudiante vinculado;
+    no escribe en la BD del colegio.
+    """
+    vinculo = vinculo_estudiante(apoderado, estudiante_id)
+    if not circuit_breaker.permite_intentar(vinculo.tenant_id):
+        raise UpstreamSchoolDbUnavailable()
+    alias = tenant_alias(vinculo.tenant_id)
+    try:
+        existe = (
+            Incidencia.objects.using(alias)
+            .filter(pk=incidencia_id, estudiante_id=estudiante_id)
+            .exclude(estado="Anulada")
+            .exists()
+        )
+    except Exception as exc:  # noqa: BLE001
+        circuit_breaker.registrar_fallo(vinculo.tenant_id)
+        raise UpstreamSchoolDbUnavailable() from exc
+    circuit_breaker.registrar_exito(vinculo.tenant_id)
+
+    if not existe:
+        raise StudentLinkNotFound()
+
+    ConfirmacionIncidencia.objects.get_or_create(
+        apoderado=apoderado,
+        tenant_id=vinculo.tenant_id,
+        id_incidencia_colegio=incidencia_id,
+        defaults={"confirmada_en": timezone.now()},
+    )

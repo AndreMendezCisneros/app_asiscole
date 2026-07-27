@@ -29,6 +29,9 @@ python-dotenv>=1.0,<2.0
 # --- Servidor de aplicacion en produccion ---
 gunicorn>=22.0,<24.0
 
+# --- Push Android (FCM). Sin esto el proveedor entra en modo simulado. ---
+firebase-admin>=6.5,<7.0
+
 # --- Pruebas ---
 pytest>=8.3,<9.0
 pytest-django>=4.9,<5.0

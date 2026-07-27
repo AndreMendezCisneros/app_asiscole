@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../firebase_options.dart';
@@ -11,7 +12,7 @@ import '../../firebase_options.dart';
 class ServicioPush {
   ServicioPush([FirebaseMessaging? mensajeria]) : _mensajeriaInyectada = mensajeria;
 
-  static const String canalId = 'asiscole_avisos';
+  static const String canalId = 'asiscole_avisos_v2';
   static const String tipoSolicitudTransferencia = 'session_transfer_request';
 
   final FirebaseMessaging? _mensajeriaInyectada;
@@ -53,7 +54,14 @@ class ServicioPush {
         );
       }
       _mensajeria = _mensajeriaInyectada ?? FirebaseMessaging.instance;
-      await _mensajeria!.requestPermission();
+      final permiso = await _mensajeria!.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      if (permiso.authorizationStatus == AuthorizationStatus.denied) {
+        developer.log('push permiso denegado', name: 'push');
+      }
       await _iniciarNotificacionesLocales();
 
       FirebaseMessaging.onMessage.listen(_alRecibir);
@@ -70,10 +78,17 @@ class ServicioPush {
       final actual = await token();
       if (actual != null && actual.isNotEmpty) {
         _tokensActualizados.add(actual);
+        developer.log('push activo', name: 'push');
+      } else {
+        developer.log('push sin token FCM', name: 'push');
       }
     } on Object catch (e) {
       _activo = false;
-      developer.log('push inactivo: ${e.runtimeType}', name: 'push');
+      // Solo tipo + mensaje corto; nunca tokens ni payloads.
+      developer.log(
+        'push inactivo: ${e.runtimeType}: $e',
+        name: 'push',
+      );
     }
   }
 
@@ -88,7 +103,7 @@ class ServicioPush {
 
   Future<void> _iniciarNotificacionesLocales() async {
     const ajustes = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('@drawable/ic_stat_asiscole'),
       iOS: DarwinInitializationSettings(),
     );
     await _locales.initialize(
@@ -101,12 +116,17 @@ class ServicioPush {
 
     final android = _locales.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
+    // Canal con sonido (como WhatsApp). Si el canal ya existía sin sonido,
+    // Android no lo actualiza: hay que borrar la app o el canal en Ajustes.
     await android?.createNotificationChannel(
       const AndroidNotificationChannel(
         canalId,
         'Avisos del colegio',
         description: 'Entradas, salidas e incidencias',
-        importance: Importance.high,
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        showBadge: true,
       ),
     );
     await android?.requestNotificationsPermission();
@@ -121,26 +141,51 @@ class ServicioPush {
     final titulo = aviso?.title ?? 'Asiscole Messenger';
     final cuerpo = aviso?.body ?? _textoGenerico(tipo);
 
-    _locales.show(
+    unawaited(_mostrarEnBandeja(
       id: mensaje.hashCode,
+      titulo: titulo,
+      cuerpo: cuerpo,
+      payload: destino,
+    ));
+
+    if (destino != null && destino.startsWith('mensajes/')) {
+      _avisosMensaje.add(null);
+    }
+    if (destino != null) _procesarDestino(destino);
+  }
+
+  Future<void> _mostrarEnBandeja({
+    required int id,
+    required String titulo,
+    required String cuerpo,
+    String? payload,
+  }) {
+    return _locales.show(
+      id: id,
       title: titulo,
       body: cuerpo,
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           canalId,
           'Avisos del colegio',
-          importance: Importance.high,
-          priority: Priority.high,
+          channelDescription: 'Entradas, salidas e incidencias',
+          importance: Importance.max,
+          priority: Priority.max,
+          playSound: true,
+          enableVibration: true,
+          icon: '@drawable/ic_stat_asiscole',
+          largeIcon: DrawableResourceAndroidBitmap('ic_asiscole_logo'),
+          color: Color(0xFF3D5AFE),
+          category: AndroidNotificationCategory.message,
         ),
-        iOS: DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       ),
-      payload: destino,
+      payload: payload,
     );
-
-    if (destino != null && destino.startsWith('mensajes/')) {
-      _avisosMensaje.add(null);
-    }
-    if (destino != null) _procesarDestino(destino);
   }
 
   void _alAbrir(RemoteMessage mensaje) {

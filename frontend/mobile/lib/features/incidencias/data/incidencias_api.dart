@@ -10,6 +10,8 @@ class IncidenciaResumen {
     required this.falta,
     required this.esGrave,
     required this.reportadoPor,
+    this.confirmada = false,
+    this.confirmadaEn,
   });
 
   final int id;
@@ -18,6 +20,21 @@ class IncidenciaResumen {
   final String falta;
   final bool esGrave;
   final String reportadoPor;
+  final bool confirmada;
+  final String? confirmadaEn;
+
+  IncidenciaResumen copyWith({bool? confirmada, String? confirmadaEn}) {
+    return IncidenciaResumen(
+      id: id,
+      fecha: fecha,
+      categoria: categoria,
+      falta: falta,
+      esGrave: esGrave,
+      reportadoPor: reportadoPor,
+      confirmada: confirmada ?? this.confirmada,
+      confirmadaEn: confirmadaEn ?? this.confirmadaEn,
+    );
+  }
 
   factory IncidenciaResumen.fromJson(Map<String, dynamic> json) =>
       IncidenciaResumen(
@@ -27,6 +44,8 @@ class IncidenciaResumen {
         falta: json['falta'] as String,
         esGrave: json['es_grave'] as bool? ?? false,
         reportadoPor: json['reportado_por'] as String? ?? '',
+        confirmada: json['confirmada'] as bool? ?? false,
+        confirmadaEn: json['confirmada_en'] as String?,
       );
 }
 
@@ -46,6 +65,20 @@ class IncidenciasApi {
           .whereType<Map>()
           .map((e) => IncidenciaResumen.fromJson(Map<String, dynamic>.from(e)))
           .toList();
+    } on DioException catch (e) {
+      throw ApiError.deDio(e);
+    }
+  }
+
+  Future<void> confirmar({
+    required int incidenciaId,
+    required int estudianteId,
+  }) async {
+    try {
+      await _dio.post<void>(
+        '/incidencias/$incidenciaId/confirmar',
+        queryParameters: {'estudiante_id': estudianteId},
+      );
     } on DioException catch (e) {
       throw ApiError.deDio(e);
     }

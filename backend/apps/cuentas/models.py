@@ -277,6 +277,44 @@ class PushToken(models.Model):
         return f"push_token:{self.pk}"
 
 
+class ConfirmacionIncidencia(models.Model):
+    """Confirmación de lectura de una incidencia (`asis_confirmacion_incidencia`).
+
+    Vive en la BD central: no altera `incidencias` del colegio. La clave natural
+    es (apoderado, tenant, id_incidencia_colegio).
+    """
+
+    apoderado = models.ForeignKey(
+        Apoderado,
+        on_delete=models.CASCADE,
+        db_column="apoderado_id",
+        related_name="confirmaciones_incidencia",
+    )
+    tenant_id = models.TextField()
+    id_incidencia_colegio = models.IntegerField()
+    confirmada_en = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "asis_confirmacion_incidencia"
+        verbose_name = "Confirmacion de incidencia"
+        verbose_name_plural = "Confirmaciones de incidencia"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["apoderado", "tenant_id", "id_incidencia_colegio"],
+                name="asis_uniq_conf_incidencia",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["apoderado", "tenant_id"],
+                name="asis_idx_conf_apo_ten",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"confirmacion_incidencia:{self.pk}"
+
+
 class IntentoLogin(models.Model):
     """Intento de login para el control de fuerza bruta (`asis_intento_login`).
 

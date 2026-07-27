@@ -1,12 +1,20 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/di/injector.dart';
 import '../../../core/error/api_error.dart';
+import '../../../core/error/error_codes.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/chip_hijo_activo.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
+import '../../../core/widgets/tour_asiscole.dart';
 import '../../perfil/data/perfil_repository.dart';
 import '../data/incidencias_api.dart';
 
@@ -17,15 +25,52 @@ class IncidenciasPage extends StatefulWidget {
   State<IncidenciasPage> createState() => _IncidenciasPageState();
 }
 
-class _IncidenciasPageState extends State<IncidenciasPage> {
+class _IncidenciasPageState extends State<IncidenciasPage>
+    with CierraSheetAlCambiarTab {
   List<IncidenciaResumen>? _items;
   String? _error;
   bool _cargando = true;
+  EstudianteVinculado? _hijo;
+  int? _estudianteId;
+  bool _citacionActiva = false;
+
+  @override
+  String get rutaDeEstaSeccion => '/incidencias';
 
   @override
   void initState() {
     super.initState();
     _cargar();
+    unawaited(_cargarFlagCitacion());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) registrarListenerRuta();
+      if (!mounted) return;
+      TourAsiscole.mostrarSiCorresponde(
+        context,
+        seccion: 'incidencias',
+        titulo: GuiasTour.incidencias.titulo,
+        cuerpo: GuiasTour.incidencias.cuerpo,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    cancelarListenerRuta();
+    super.dispose();
+  }
+
+  Future<void> _cargarFlagCitacion() async {
+    try {
+      final resp = await sl<ApiClient>().dio.get<Map<String, dynamic>>(
+        '/feature-flags',
+      );
+      if (mounted) {
+        setState(() => _citacionActiva = resp.data?['citacion'] == true);
+      }
+    } on Object {
+      if (mounted) setState(() => _citacionActiva = false);
+    }
   }
 
   Future<void> _cargar() async {
@@ -34,18 +79,30 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
       _error = null;
     });
     try {
-      final perfil = await sl<PerfilRepository>().obtener();
+      final repo = sl<PerfilRepository>();
+      final perfil = await repo.obtener();
+      final hijos = await repo.estudiantes();
       final id = perfil.estudianteActivoId;
+      EstudianteVinculado? hijo;
+      for (final h in hijos) {
+        if (h.activo || h.id == id) {
+          hijo = h;
+          break;
+        }
+      }
       if (id == null) {
         setState(() {
           _error = 'Selecciona un estudiante en Perfil.';
           _cargando = false;
+          _hijo = hijo;
         });
         return;
       }
       final items = await sl<IncidenciasApi>().listar(id);
       setState(() {
         _items = items;
+        _estudianteId = id;
+        _hijo = hijo;
         _cargando = false;
       });
     } on DioException catch (e) {
@@ -78,7 +135,7 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                   child: Text(
                     'Incidencias',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -87,6 +144,20 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
                         ),
                   ),
                 ),
+                if (_hijo != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: ChipHijoActivo(
+                      nombre: _hijo!.nombre,
+                      detalle: '${_hijo!.grado} ${_hijo!.seccion}'.trim(),
+                      onCambiar: () => context.go(Rutas.perfil),
+                    ),
+                  ),
+                if (!_citacionActiva)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: _ChipCitacionDeshabilitada(),
+                  ),
                 Expanded(
                   child: _cargando
                       ? const Center(child: CircularProgressIndicator())
@@ -97,7 +168,14 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(_error!, textAlign: TextAlign.center),
+                                    Text(
+                                      _error!,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: AppTheme.texto,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                     const SizedBox(height: 16),
                                     FilledButton(
                                       onPressed: _cargar,
@@ -133,7 +211,7 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
                                         final it = _items![i];
                                         return _CardIncidencia(
                                           item: it,
-                                          onTap: () => _detalle(context, it),
+                                          onTap: () => _detalle(it),
                                         );
                                       },
                                     ),
@@ -147,83 +225,242 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
     );
   }
 
-  Future<void> _detalle(BuildContext context, IncidenciaResumen it) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppTheme.fondo,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+  Future<void> _detalle(IncidenciaResumen it) async {
+    await mostrarSheetSeccion(
+      builder: (ctx) => _DetalleIncidenciaSheet(
+        item: it,
+        estudianteId: _estudianteId,
+        onConfirmada: (actualizado) {
+          setState(() {
+            _items = [
+              for (final x in _items!)
+                if (x.id == actualizado.id) actualizado else x,
+            ];
+          });
+        },
       ),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppTheme.borde,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+    );
+  }
+}
+
+class _ChipCitacionDeshabilitada extends StatelessWidget {
+  const _ChipCitacionDeshabilitada();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.borde.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.borde),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.event_busy, size: 18, color: AppTheme.textoSecundario),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Citaciones — próximamente (deshabilitado)',
+              style: TextStyle(
+                color: AppTheme.textoSecundario,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetalleIncidenciaSheet extends StatefulWidget {
+  const _DetalleIncidenciaSheet({
+    required this.item,
+    required this.estudianteId,
+    required this.onConfirmada,
+  });
+
+  final IncidenciaResumen item;
+  final int? estudianteId;
+  final ValueChanged<IncidenciaResumen> onConfirmada;
+
+  @override
+  State<_DetalleIncidenciaSheet> createState() =>
+      _DetalleIncidenciaSheetState();
+}
+
+class _DetalleIncidenciaSheetState extends State<_DetalleIncidenciaSheet> {
+  late IncidenciaResumen _item = widget.item;
+  bool _enviando = false;
+  String? _error;
+
+  Future<void> _confirmar() async {
+    final estId = widget.estudianteId;
+    if (estId == null || _item.confirmada) return;
+    setState(() {
+      _enviando = true;
+      _error = null;
+    });
+    try {
+      await sl<IncidenciasApi>().confirmar(
+        incidenciaId: _item.id,
+        estudianteId: estId,
+      );
+      final actualizado = _item.copyWith(
+        confirmada: true,
+        confirmadaEn: DateTime.now().toIso8601String(),
+      );
+      setState(() {
+        _item = actualizado;
+        _enviando = false;
+      });
+      widget.onConfirmada(actualizado);
+    } on ApiError catch (e) {
+      setState(() {
+        // 404 genérico del canal / ruta inexistente en un servidor viejo se
+        // mapea a STUDENT_LINK_NOT_FOUND; no implica datos de login incorrectos.
+        _error = e.codigo == CodigosError.vinculoNoEncontrado
+            ? 'No se pudo confirmar esta incidencia. '
+                'Si el listado carga bien, el servidor del canal puede estar '
+                'desactualizado; inténtalo más tarde.'
+            : e.mensaje;
+        _enviando = false;
+      });
+    } on DioException catch (e) {
+      final api = ApiError.deDio(e);
+      setState(() {
+        _error = api.codigo == CodigosError.vinculoNoEncontrado
+            ? 'No se pudo confirmar esta incidencia. '
+                'Si el listado carga bien, el servidor del canal puede estar '
+                'desactualizado; inténtalo más tarde.'
+            : api.mensaje;
+        _enviando = false;
+      });
+    } catch (_) {
+      setState(() {
+        _error = 'No se pudo confirmar. Inténtalo de nuevo.';
+        _enviando = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.borde,
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _item.falta,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      color: AppTheme.texto,
+                    ),
+                  ),
+                ),
+                if (_item.esGrave)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.moradoClaro.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Grave',
+                      style: TextStyle(
+                        color: AppTheme.moradoPrincipal,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+                else
+                  const Icon(Icons.check_circle, color: AppTheme.celeste),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Categoría: ${_item.categoria}',
+              style: const TextStyle(color: AppTheme.textoSecundario),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Reportado por: ${_item.reportadoPor}',
+              style: const TextStyle(color: AppTheme.textoSecundario),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Fecha: ${_item.fecha}',
+              style: const TextStyle(color: AppTheme.textoSecundario),
+            ),
+            const SizedBox(height: 16),
+            if (_item.confirmada)
+              const Row(
                 children: [
+                  Icon(Icons.verified, color: AppTheme.celeste),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      it.falta,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
+                      'Ya confirmaste que recibiste esta incidencia',
+                      style: TextStyle(
                         color: AppTheme.texto,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                  if (it.esGrave)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.moradoClaro.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'Grave',
-                        style: TextStyle(
-                          color: AppTheme.moradoPrincipal,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    )
-                  else
-                    const Icon(Icons.check_circle, color: AppTheme.celeste),
                 ],
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _enviando ? null : _confirmar,
+                  icon: _enviando
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.mark_email_read_outlined),
+                  label: const Text('Confirmar que recibí esta incidencia'),
+                ),
               ),
-              const SizedBox(height: 12),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
               Text(
-                'Categoría: ${it.categoria}',
-                style: const TextStyle(color: AppTheme.textoSecundario),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Reportado por: ${it.reportadoPor}',
-                style: const TextStyle(color: AppTheme.textoSecundario),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Fecha: ${it.fecha}',
-                style: const TextStyle(color: AppTheme.textoSecundario),
+                _error!,
+                style: const TextStyle(
+                  color: Color(0xFF991B1B),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -257,7 +494,11 @@ class _CardIncidencia extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppTheme.borde),
+            border: Border.all(
+              color: item.confirmada
+                  ? AppTheme.celeste.withValues(alpha: 0.5)
+                  : AppTheme.borde,
+            ),
           ),
           child: Row(
             children: [
@@ -328,6 +569,19 @@ class _CardIncidencia extends StatelessWidget {
                         fontSize: 13,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.confirmada
+                          ? 'Confirmada por el apoderado'
+                          : 'Pendiente de confirmación',
+                      style: TextStyle(
+                        color: item.confirmada
+                            ? AppTheme.celeste
+                            : AppTheme.ambar,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -349,8 +603,11 @@ class _CardIncidencia extends StatelessWidget {
                     ),
                   ),
                 )
+              else if (item.confirmada)
+                const Icon(Icons.verified, color: AppTheme.celeste, size: 22)
               else
-                const Icon(Icons.check_circle, color: AppTheme.celeste, size: 22),
+                const Icon(Icons.check_circle_outline,
+                    color: AppTheme.textoSecundario, size: 22),
             ],
           ),
         ),

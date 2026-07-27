@@ -4,10 +4,14 @@ El canal no tiene OTP en la version 1: la unica barrera contra quien conozca un
 documento de estudiante y un telefono son estos contadores. Se llevan en la
 cache (Redis en produccion), compartidos por todos los procesos:
 
-* `LOGIN_MAX_ATTEMPTS` fallos por credencial (telefono + documento) dentro de
-  `LOGIN_ATTEMPT_WINDOW_MINUTES` disparan un bloqueo de `LOGIN_LOCKOUT_MINUTES`.
-* El mismo limite se aplica por IP, para que probar documentos distintos contra
-  el mismo telefono tampoco salga gratis.
+* Tras `LOGIN_MAX_ATTEMPTS` fallos (por defecto 3) se aplica un bloqueo corto
+  de `LOGIN_LOCKOUT_MINUTES` (5 min).
+* Si tras el desbloqueo vuelve a fallar (o acumula mas fallos), el siguiente
+  bloqueo dura `LOGIN_LOCKOUT_ESCALATED_MINUTES` (10 min).
+* Al llegar a `LOGIN_HARD_MAX_ATTEMPTS` fallos acumulados en la ventana
+  (`LOGIN_ATTEMPT_WINDOW_MINUTES`), bloqueo largo de
+  `LOGIN_HARD_LOCKOUT_MINUTES` (24 h) hasta que expire o un admin limpie.
+* El mismo esquema aplica por IP.
 * `TRANSFER_MAX_PER_HOUR` solicitudes de traspaso por cuenta y hora.
 
 PRIVACIDAD (Ley N.o 29733): la clave de la cache y la columna
@@ -20,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 
 from django.conf import settings
 from django.core.cache import cache
@@ -67,12 +72,25 @@ def _ventana_segundos() -> int:
     return max(1, int(settings.LOGIN_ATTEMPT_WINDOW_MINUTES) * 60)
 
 
-def _bloqueo_segundos() -> int:
-    return max(1, int(settings.LOGIN_LOCKOUT_MINUTES) * 60)
-
-
 def _maximo_intentos() -> int:
     return max(1, int(settings.LOGIN_MAX_ATTEMPTS))
+
+
+def _maximo_duro() -> int:
+    return max(_maximo_intentos(), int(settings.LOGIN_HARD_MAX_ATTEMPTS))
+
+
+def _minutos_bloqueo(fallos: int) -> int:
+    """Elige la duración del bloqueo según fallos acumulados en la ventana."""
+    if fallos >= _maximo_duro():
+        return max(1, int(settings.LOGIN_HARD_LOCKOUT_MINUTES))
+    if fallos > _maximo_intentos():
+        return max(1, int(settings.LOGIN_LOCKOUT_ESCALATED_MINUTES))
+    return max(1, int(settings.LOGIN_LOCKOUT_MINUTES))
+
+
+def _debe_bloquear(fallos: int) -> bool:
+    return fallos >= _maximo_intentos()
 
 
 def _sumar(clave: str, ttl: int) -> int:
@@ -81,6 +99,46 @@ def _sumar(clave: str, ttl: int) -> int:
     actual = int(cache.get(clave) or 0) + 1
     cache.set(clave, actual, timeout=ttl)
     return actual
+
+
+def _activar_bloqueo(clave_bloqueo: str, fallos: int, motivo: str) -> None:
+    minutos = _minutos_bloqueo(fallos)
+    hasta = time.time() + (minutos * 60)
+    # Guardamos el epoch de fin: permite informar minutos restantes sin PII.
+    cache.set(clave_bloqueo, hasta, timeout=max(1, minutos * 60))
+    # No se borra el contador de fallos: permite escalar 5→10→24h en la ventana.
+    logger.warning(
+        "login_bloqueo_activado",
+        extra={"motivo": motivo, "minutos": minutos, "fallos": fallos},
+    )
+
+
+def _minutos_restantes(clave_bloqueo: str) -> int | None:
+    """Devuelve minutos restantes del bloqueo, o None si no hay bloqueo."""
+    valor = cache.get(clave_bloqueo)
+    if valor is None:
+        return None
+    try:
+        hasta = float(valor)
+    except (TypeError, ValueError):
+        return 1
+    restantes = int((hasta - time.time()) / 60)
+    return max(1, restantes)
+
+
+def _mensaje_bloqueo(minutos: int | None) -> str:
+    if minutos is None:
+        return AccountLocked.default_message
+    if minutos >= 60:
+        horas = max(1, minutos // 60)
+        return (
+            f"Bloqueamos el acceso temporalmente por varios intentos fallidos. "
+            f"Inténtalo en unas {horas} h."
+        )
+    return (
+        f"Bloqueamos el acceso temporalmente por varios intentos fallidos. "
+        f"Inténtalo en unos {minutos} min."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -97,42 +155,36 @@ def verificar_login(credencial: str, ip: str | None = None) -> None:
     Raises:
         AccountLocked: Hay un bloqueo temporal vigente por intentos fallidos.
     """
-    if cache.get(_clave_bloqueo(credencial)):
+    minutos = _minutos_restantes(_clave_bloqueo(credencial))
+    if minutos is not None:
         logger.info("login_bloqueado", extra={"motivo": "credencial"})
-        raise AccountLocked()
+        raise AccountLocked(_mensaje_bloqueo(minutos))
 
-    if ip and cache.get(_clave_bloqueo_ip(_hash_ip(ip))):
-        logger.info("login_bloqueado", extra={"motivo": "ip"})
-        raise AccountLocked()
+    if ip:
+        minutos_ip = _minutos_restantes(_clave_bloqueo_ip(_hash_ip(ip)))
+        if minutos_ip is not None:
+            logger.info("login_bloqueado", extra={"motivo": "ip"})
+            raise AccountLocked(_mensaje_bloqueo(minutos_ip))
 
 
 def registrar_fallo_login(credencial: str, ip: str | None = None) -> None:
     """Anota un intento fallido y bloquea si se alcanzo el limite.
 
     Deja rastro en `asis_intento_login` (solo el hash) y actualiza los
-    contadores de la cache.
+    contadores de la cache. El contador de fallos se conserva tras un bloqueo
+    corto para poder escalar la duracion (5 min → 10 min → 24 h).
     """
     IntentoLogin.objects.create(clave=credencial, ip=ip or None, exitoso=False)
 
     fallos = _sumar(_clave_fallos(credencial), _ventana_segundos())
-    if fallos >= _maximo_intentos():
-        cache.set(_clave_bloqueo(credencial), 1, timeout=_bloqueo_segundos())
-        cache.delete(_clave_fallos(credencial))
-        logger.warning(
-            "login_bloqueo_activado",
-            extra={"motivo": "credencial", "minutos": settings.LOGIN_LOCKOUT_MINUTES},
-        )
+    if _debe_bloquear(fallos) and not cache.get(_clave_bloqueo(credencial)):
+        _activar_bloqueo(_clave_bloqueo(credencial), fallos, "credencial")
 
     if ip:
         ip_hash = _hash_ip(ip)
         fallos_ip = _sumar(_clave_fallos_ip(ip_hash), _ventana_segundos())
-        if fallos_ip >= _maximo_intentos():
-            cache.set(_clave_bloqueo_ip(ip_hash), 1, timeout=_bloqueo_segundos())
-            cache.delete(_clave_fallos_ip(ip_hash))
-            logger.warning(
-                "login_bloqueo_activado",
-                extra={"motivo": "ip", "minutos": settings.LOGIN_LOCKOUT_MINUTES},
-            )
+        if _debe_bloquear(fallos_ip) and not cache.get(_clave_bloqueo_ip(ip_hash)):
+            _activar_bloqueo(_clave_bloqueo_ip(ip_hash), fallos_ip, "ip")
 
 
 def registrar_exito_login(credencial: str, ip: str | None = None) -> None:

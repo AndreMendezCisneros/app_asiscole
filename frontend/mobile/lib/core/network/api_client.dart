@@ -41,6 +41,7 @@ class ApiClient {
     if (kDebugMode) {
       developer.log('API baseUrl=${baseUrl ?? Env.baseUrl}', name: 'api');
       _dio.interceptors.add(_TrazaSinDatosPersonales());
+      _dio.interceptors.add(_MedicionBytesDebug());
     }
   }
 
@@ -71,5 +72,41 @@ class _TrazaSinDatosPersonales extends Interceptor {
       name: 'api',
     );
     handler.next(err);
+  }
+}
+
+/// En debug suma bytes de request/response (sin cuerpos ni PII) para estimar
+/// consumo de datos en pruebas Wi‑Fi vs móvil.
+class _MedicionBytesDebug extends Interceptor {
+  static int enviados = 0;
+  static int recibidos = 0;
+
+  int _tamano(dynamic data) {
+    if (data == null) return 0;
+    if (data is List<int>) return data.length;
+    return data.toString().length;
+  }
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    enviados += _tamano(options.data);
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(Response<dynamic> response, ResponseInterceptorHandler handler) {
+    final cl = response.headers.value('content-length');
+    final n = cl == null ? null : int.tryParse(cl);
+    if (n != null) {
+      recibidos += n;
+    } else {
+      recibidos += _tamano(response.data);
+    }
+    developer.log(
+      'bytes ≈ enviados=$enviados recibidos=$recibidos '
+      '(${response.requestOptions.method} ${response.requestOptions.path})',
+      name: 'api.bytes',
+    );
+    handler.next(response);
   }
 }

@@ -11,7 +11,7 @@ class LocalDb {
   LocalDb({String nombreArchivo = 'asiscole.db'})
       : _nombreArchivo = nombreArchivo;
 
-  static const int _version = 1;
+  static const int _version = 5;
   static const String tablaMensajes = 'mensajes';
 
   final String _nombreArchivo;
@@ -21,7 +21,12 @@ class LocalDb {
 
   Future<Database> _abrir() async {
     final ruta = p.join(await getDatabasesPath(), _nombreArchivo);
-    return openDatabase(ruta, version: _version, onCreate: _crear);
+    return openDatabase(
+      ruta,
+      version: _version,
+      onCreate: _crear,
+      onUpgrade: _actualizar,
+    );
   }
 
   Future<void> _crear(Database db, int version) async {
@@ -42,6 +47,13 @@ class LocalDb {
     await db.execute(
       'CREATE INDEX idx_mensajes_emitido_en ON $tablaMensajes (emitido_en DESC)',
     );
+  }
+
+  /// v2–v5: vaciar caché tras correcciones de `emitido_en` (UTC canónico).
+  Future<void> _actualizar(Database db, int anterior, int nueva) async {
+    if (anterior < 5) {
+      await db.delete(tablaMensajes);
+    }
   }
 
   /// Inserta o actualiza mensajes ya renderizados por el backend.

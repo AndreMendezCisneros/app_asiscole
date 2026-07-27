@@ -269,8 +269,8 @@ CELERY_BEAT_SCHEDULE = {
     "poller-outbox": {
         # Lee asis_outbox de cada colegio y encola la generacion de mensajes.
         "task": "apps.ingesta.tasks.poll_outbox_colegios",
-        "schedule": 15.0,
-        "options": {"expires": 14},
+        "schedule": 10.0,
+        "options": {"expires": 9},
     },
     "purga-retencion-mensajes": {
         # Purga/anonimiza mensajes que superan MESSAGE_RETENTION_MONTHS (RNF-11).
@@ -347,10 +347,15 @@ SESSION_RENEW_WINDOW_DAYS = env_int("SESSION_RENEW_WINDOW_DAYS", 3)
 DATA_TOKEN_MINUTES = env_int("DATA_TOKEN_MINUTES", 60)
 TRANSFER_REQUEST_TTL_MINUTES = env_int("TRANSFER_REQUEST_TTL_MINUTES", 5)
 
-# Rate limiting del login (SRS 14.3)
-LOGIN_MAX_ATTEMPTS = env_int("LOGIN_MAX_ATTEMPTS", 5)
-LOGIN_ATTEMPT_WINDOW_MINUTES = env_int("LOGIN_ATTEMPT_WINDOW_MINUTES", 15)
-LOGIN_LOCKOUT_MINUTES = env_int("LOGIN_LOCKOUT_MINUTES", 30)
+# Rate limiting del login (SRS 14.3) — curva escalonada:
+#   3 fallos → bloqueo 5 min; si sigue fallando → 10 min;
+#   ~8 fallos acumulados en la ventana → bloqueo largo (24 h).
+LOGIN_MAX_ATTEMPTS = env_int("LOGIN_MAX_ATTEMPTS", 3)
+LOGIN_ATTEMPT_WINDOW_MINUTES = env_int("LOGIN_ATTEMPT_WINDOW_MINUTES", 60)
+LOGIN_LOCKOUT_MINUTES = env_int("LOGIN_LOCKOUT_MINUTES", 5)
+LOGIN_LOCKOUT_ESCALATED_MINUTES = env_int("LOGIN_LOCKOUT_ESCALATED_MINUTES", 10)
+LOGIN_HARD_MAX_ATTEMPTS = env_int("LOGIN_HARD_MAX_ATTEMPTS", 8)
+LOGIN_HARD_LOCKOUT_MINUTES = env_int("LOGIN_HARD_LOCKOUT_MINUTES", 1440)
 TRANSFER_MAX_PER_HOUR = env_int("TRANSFER_MAX_PER_HOUR", 3)
 
 # Retencion de mensajes en la BD central (RNF-11)

@@ -27,8 +27,9 @@ logger = logging.getLogger("asiscole.administracion")
 
 
 def listar_flags() -> dict[str, bool]:
-    """Devuelve los flags; garantiza `notas=false` por defecto."""
+    """Devuelve los flags; garantiza `notas` y `citacion` en false por defecto."""
     FeatureFlag.objects.get_or_create(clave="notas", defaults={"activo": False})
+    FeatureFlag.objects.get_or_create(clave="citacion", defaults={"activo": False})
     return {f.clave: f.activo for f in FeatureFlag.objects.all()}
 
 

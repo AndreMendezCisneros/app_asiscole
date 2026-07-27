@@ -15,9 +15,23 @@ def health(request: HttpRequest) -> JsonResponse:
     """Sonda de vida del proceso web.
 
     No toca la BD ni Redis a proposito: responde si el contenedor sirve trafico.
-    El estado de los colegios se expone aparte, en la app de administracion.
+    Incluye `fcm_disponible` (bool) para ops: no filtra rutas ni secretos.
     """
-    return JsonResponse({"status": "ok", "servicio": "asiscole-backend"})
+    from apps.mensajeria.push.fcm import ProveedorFCM
+
+    fcm_ok = False
+    try:
+        fcm_ok = ProveedorFCM().disponible()
+    except Exception:  # noqa: BLE001 — health nunca debe caer
+        fcm_ok = False
+
+    return JsonResponse(
+        {
+            "status": "ok",
+            "servicio": "asiscole-backend",
+            "fcm_disponible": fcm_ok,
+        }
+    )
 
 
 urlpatterns = [

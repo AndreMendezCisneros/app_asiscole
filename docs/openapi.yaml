@@ -424,6 +424,28 @@ paths:
         "403": { $ref: "#/components/responses/RoleNotAllowed" }
         "404": { $ref: "#/components/responses/StudentLinkNotFound" }
 
+  /incidencias/{id}/confirmar:
+    post:
+      tags: [incidencias]
+      summary: Confirmar lectura de una incidencia (RF-G)
+      description: |
+        Marca la incidencia como confirmada por el apoderado autenticado.
+        La confirmación vive en la BD central (`asis_confirmacion_incidencia`);
+        no modifica tablas del colegio. Idempotente: repetir el POST no falla.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - $ref: "#/components/parameters/EstudianteId"
+      responses:
+        "204":
+          description: Confirmación registrada
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+        "404": { $ref: "#/components/responses/StudentLinkNotFound" }
+        "503": { $ref: "#/components/responses/UpstreamSchoolDbUnavailable" }
+
   # -------------------------------------------------------------- perfil ----
   /perfil:
     get:
@@ -716,16 +738,15 @@ paths:
     get:
       tags: [sistema]
       summary: Feature flags remotos (RF-H03)
-      description: Permite activar el módulo de notas sin publicar una versión nueva.
+      description: |
+        Permite activar módulos (notas, citación) sin publicar una versión nueva.
+        `citacion` y `notas` arrancan en `false` hasta activación remota.
       responses:
         "200":
           description: Flags vigentes
           content:
             application/json:
-              schema:
-                type: object
-                additionalProperties: { type: boolean }
-                example: { notas: false }
+              schema: { $ref: "#/components/schemas/FeatureFlags" }
 
 components:
   securitySchemes:
@@ -864,6 +885,14 @@ components:
         es_grave: { type: boolean }
         tiene_evidencia: { type: boolean }
         reportado_por: { type: string }
+        confirmada:
+          type: boolean
+          description: True si el apoderado ya confirmó esta incidencia (BD central).
+        confirmada_en:
+          type: string
+          format: date-time
+          nullable: true
+          description: Momento de la confirmación; null si aún no confirmó.
 
     IncidenciaDetalle:
       allOf:
@@ -878,6 +907,19 @@ components:
                 properties:
                   url: { type: string, format: uri }
                   tipo_mime: { type: string }
+
+    FeatureFlags:
+      type: object
+      required: [notas, citacion]
+      properties:
+        notas:
+          type: boolean
+          description: Módulo de notas (deshabilitado por defecto).
+        citacion:
+          type: boolean
+          description: Módulo de citación (stub; deshabilitado por defecto).
+      additionalProperties: { type: boolean }
+      example: { notas: false, citacion: false }
 
     Perfil:
       type: object

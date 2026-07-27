@@ -21,10 +21,20 @@ class MensajesRepository {
     if (!online) {
       return _desdeCache();
     }
-    // No usamos `since`: con el desfase TZ de la BD central el filtro
-    // `emitido_en__gt` puede ocultar mensajes posteriores (p. ej. la salida).
-    // Traemos la bandeja reciente y hacemos upsert por id.
-    final pagina = await _api.listar();
+    // `since` con margen de 6 h: evita perder mensajes por desfase TZ de la BD
+    // central, y reduce el payload cuando ya hay caché local.
+    String? since;
+    final ultima = await _local.ultimaMarcaDeTiempo();
+    if (ultima != null) {
+      final dt = DateTime.tryParse(ultima);
+      if (dt != null) {
+        since = dt
+            .toUtc()
+            .subtract(const Duration(hours: 6))
+            .toIso8601String();
+      }
+    }
+    final pagina = await _api.listar(since: since);
     await _local.guardarMensajes(
       pagina.items.map((m) => m.toLocalRow()).toList(),
     );

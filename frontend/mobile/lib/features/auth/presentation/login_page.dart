@@ -201,32 +201,37 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             decoration: _decoCampo(
                               hint: '987 654 321',
-                              prefix: Padding(
-                                padding:
-                                    const EdgeInsets.only(left: 16, right: 6),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.moradoClaro
-                                            .withValues(alpha: 0.18),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Text(
-                                        TelefonoPeru.prefijo,
-                                        style: TextStyle(
-                                          color: AppTheme.moradoPrincipal,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 14,
+                              prefix: IgnorePointer(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 16,
+                                    right: 6,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.moradoClaro
+                                              .withValues(alpha: 0.18),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: const Text(
+                                          TelefonoPeru.prefijo,
+                                          style: TextStyle(
+                                            color: AppTheme.moradoPrincipal,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),

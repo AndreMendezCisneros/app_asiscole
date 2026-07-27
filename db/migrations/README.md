@@ -10,6 +10,7 @@ script va en una de ellas; ejecutarlos en la que no toca no funciona.
 | `003_seeds_desarrollo.sql` | BD de colegio **local** | Solo en desarrollo, nunca en producción |
 | `004_mensaje_unico_por_apoderado.sql` | **BD central** (si ya aplicaste un `002` antiguo) | Corrige el índice único de mensajes |
 | `005_central_gaps.sql` | **BD central** (si ya aplicaste un `002` antiguo) | Añade estudiante activo y cursor de ingesta |
+| `006_confirmacion_incidencia.sql` | **BD central** (si ya aplicaste un `002` antiguo) | Confirmación de incidencias + flag `citacion` |
 
 `db/legacy/bootstrap_colegio.sql` es solo referencia estructural del esquema del
 colegio: no se ejecuta y no se edita.

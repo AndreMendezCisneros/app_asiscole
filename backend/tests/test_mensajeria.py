@@ -2,12 +2,35 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone as dt_timezone
+
 import pytest
 from django.utils import timezone
 
 from apps.cuentas.models import Apoderado
 from apps.mensajeria.models import Mensaje
-from apps.mensajeria.services import listar_mensajes, marcar_leidos
+from apps.mensajeria.services import _emitido_iso, listar_mensajes, marcar_leidos
+
+
+def test_emitido_iso_corrige_utc_etiquetado_como_lima():
+    """Postgres timestamp naive UTC leido como America/Lima (+5 h en API)."""
+    lima = timezone.get_current_timezone()
+    # Simula lectura Django: reloj 19:17 UTC guardado como aware Lima 19:17.
+    mal = timezone.make_aware(
+        datetime(2026, 7, 27, 19, 17, 44, 190001),
+        lima,
+    )
+    assert _emitido_iso(mal) == "2026-07-27T19:17:44.190001Z"
+
+
+def test_emitido_iso_naive_utc():
+    naive = datetime(2026, 7, 27, 19, 17, 44, 190001)
+    assert _emitido_iso(naive) == "2026-07-27T19:17:44.190001Z"
+
+
+def test_emitido_iso_utc_consciente():
+    utc = datetime(2026, 7, 27, 19, 17, 44, 190001, tzinfo=dt_timezone.utc)
+    assert _emitido_iso(utc) == "2026-07-27T19:17:44.190001Z"
 
 
 @pytest.mark.django_db

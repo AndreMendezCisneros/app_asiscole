@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/di/injector.dart';
@@ -48,6 +49,11 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
         _dias = dias;
         _cargando = false;
       });
+    } on DioException catch (e) {
+      setState(() {
+        _error = ApiError.deDio(e).mensaje;
+        _cargando = false;
+      });
     } on ApiError catch (e) {
       setState(() {
         _error = e.mensaje;
@@ -55,7 +61,7 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
       });
     } catch (_) {
       setState(() {
-        _error = 'Se necesita conexión para ver asistencias.';
+        _error = 'No se pudieron cargar las asistencias. Inténtalo de nuevo.';
         _cargando = false;
       });
     }
@@ -92,7 +98,17 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    child: Text(_error!, textAlign: TextAlign.center),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: _cargar,
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : RefreshIndicator(

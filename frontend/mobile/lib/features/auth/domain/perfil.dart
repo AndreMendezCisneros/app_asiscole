@@ -35,7 +35,7 @@ class Perfil extends Equatable {
         telefono: json['telefono'] as String? ?? '',
         estado: EstadoCuenta.desdeApi(json['estado'] as String?),
         motivoSuspension: json['motivo_suspension'] as String?,
-        estudianteActivoId: json['estudiante_activo_id'] as int?,
+        estudianteActivoId: (json['estudiante_activo_id'] as num?)?.toInt(),
       );
 
   Map<String, dynamic> toJson() => {

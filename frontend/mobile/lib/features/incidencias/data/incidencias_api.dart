@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import '../../../core/error/api_error.dart';
+
 class IncidenciaResumen {
   IncidenciaResumen({
     required this.id,
@@ -19,7 +21,7 @@ class IncidenciaResumen {
 
   factory IncidenciaResumen.fromJson(Map<String, dynamic> json) =>
       IncidenciaResumen(
-        id: json['id'] as int,
+        id: (json['id'] as num).toInt(),
         fecha: json['fecha'] as String,
         categoria: json['categoria'] as String,
         falta: json['falta'] as String,
@@ -33,13 +35,19 @@ class IncidenciasApi {
   final Dio _dio;
 
   Future<List<IncidenciaResumen>> listar(int estudianteId) async {
-    final resp = await _dio.get<Map<String, dynamic>>(
-      '/incidencias',
-      queryParameters: {'estudiante_id': estudianteId},
-    );
-    return (resp.data?['items'] as List? ?? [])
-        .cast<Map<String, dynamic>>()
-        .map(IncidenciaResumen.fromJson)
-        .toList();
+    try {
+      final resp = await _dio.get<Map<String, dynamic>>(
+        '/incidencias',
+        queryParameters: {'estudiante_id': estudianteId},
+      );
+      final crudos = resp.data?['items'];
+      if (crudos is! List) return [];
+      return crudos
+          .whereType<Map>()
+          .map((e) => IncidenciaResumen.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } on DioException catch (e) {
+      throw ApiError.deDio(e);
+    }
   }
 }

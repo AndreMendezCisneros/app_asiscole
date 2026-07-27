@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import '../../../core/error/api_error.dart';
+
 class DiaAsistencia {
   DiaAsistencia({
     required this.fecha,
@@ -30,17 +32,23 @@ class AsistenciasApi {
     required int anio,
     required int mes,
   }) async {
-    final resp = await _dio.get<Map<String, dynamic>>(
-      '/asistencias',
-      queryParameters: {
-        'estudiante_id': estudianteId,
-        'anio': anio,
-        'mes': mes,
-      },
-    );
-    return (resp.data?['items'] as List? ?? [])
-        .cast<Map<String, dynamic>>()
-        .map(DiaAsistencia.fromJson)
-        .toList();
+    try {
+      final resp = await _dio.get<Map<String, dynamic>>(
+        '/asistencias',
+        queryParameters: {
+          'estudiante_id': estudianteId,
+          'anio': anio,
+          'mes': mes,
+        },
+      );
+      final crudos = resp.data?['items'];
+      if (crudos is! List) return [];
+      return crudos
+          .whereType<Map>()
+          .map((e) => DiaAsistencia.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } on DioException catch (e) {
+      throw ApiError.deDio(e);
+    }
   }
 }

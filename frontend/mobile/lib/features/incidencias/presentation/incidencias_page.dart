@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/di/injector.dart';
@@ -43,6 +44,11 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
         _items = items;
         _cargando = false;
       });
+    } on DioException catch (e) {
+      setState(() {
+        _error = ApiError.deDio(e).mensaje;
+        _cargando = false;
+      });
     } on ApiError catch (e) {
       setState(() {
         _error = e.mensaje;
@@ -50,7 +56,7 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
       });
     } catch (_) {
       setState(() {
-        _error = 'Se necesita conexión para ver incidencias.';
+        _error = 'No se pudieron cargar las incidencias. Inténtalo de nuevo.';
         _cargando = false;
       });
     }
@@ -63,7 +69,22 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: _cargar,
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: _cargar,
                   child: _items!.isEmpty
@@ -80,7 +101,8 @@ class _IncidenciasPageState extends State<IncidenciasPage> {
                             final it = _items![i];
                             return ListTile(
                               title: Text(it.falta),
-                              subtitle: Text('${it.categoria} · ${it.reportadoPor}'),
+                              subtitle:
+                                  Text('${it.categoria} · ${it.reportadoPor}'),
                               trailing: it.esGrave
                                   ? const Chip(label: Text('Grave'))
                                   : null,

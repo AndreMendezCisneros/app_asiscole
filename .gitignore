@@ -20,12 +20,14 @@ service-account*.json
 **/credentials*.json
 **/fcm*.json
 secrets/
+*.rar
 *-firebase-adminsdk-*.json
 # Firebase cliente: no versionar claves reales; usar *.example y canal privado
 google-services.json
 GoogleService-Info.plist
 # firebase_options.dart SÍ puede ir al repo solo como stub sin claves reales
 # (las reales viven en secrets/ en la máquina local).
+# No commitear firebase_options.dart si contiene claves reales; dejar el stub.
 
 # Django
 *.sqlite3

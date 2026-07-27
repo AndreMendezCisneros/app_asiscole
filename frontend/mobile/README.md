@@ -44,21 +44,20 @@ Docs: https://jeanpiaget.asiscole.com/canal-api/v0.1/docs/
 
 ## Cómo correr
 
-### Producción (contra el VPS)
+### Producción / VPS (por defecto)
+
+La app apunta a `https://jeanpiaget.asiscole.com/canal-api/v0.1` en debug y release.
 
 ```powershell
 cd frontend/mobile
+# Copia Firebase de secrets/ (una vez, no va a Git):
+#   secrets\secrets\firebase_options.dart → lib\firebase_options.dart
+#   secrets\secrets\google-services.json → android\app\google-services.json
 flutter pub get
-flutter build apk --release
-# o, en debug pero ya contra el VPS:
-flutter run --release
-# o forzar la URL en debug:
-flutter run --dart-define=API_BASE_URL=https://jeanpiaget.asiscole.com/canal-api/v0.1
+.\run_dispositivo.ps1
 ```
 
 ### Desarrollo local (Django en tu PC)
-
-Backend (escucha en todas las interfaces, necesario para celular físico):
 
 ```powershell
 cd backend
@@ -66,32 +65,16 @@ cd backend
 python manage.py runserver 0.0.0.0:8000
 ```
 
-App:
-
 ```powershell
 cd frontend/mobile
-flutter pub get
-flutter run
+.\run_dispositivo.ps1 -Local -Ip 192.168.100.6
 ```
 
 | Entorno | URL |
 | --- | --- |
-| **APK release / producción** | `https://jeanpiaget.asiscole.com/canal-api/v0.1` |
-| Emulador Android (local) | `http://10.0.2.2:8000/v0.1` |
-| **Celular físico (misma Wi‑Fi, local)** | `http://IP_DE_TU_PC:8000/v0.1` — con `--dart-define` |
-| iOS simulador / escritorio (local) | `http://localhost:8000/v0.1` |
-
-Ejemplo con la IP de tu PC en la LAN:
-
-```powershell
-flutter run --dart-define=API_BASE_URL=http://192.168.100.6:8000/v0.1
-```
-
-Si usas `10.0.2.2` en un **celular real**, el login falla con “El servidor tardó demasiado” porque esa dirección solo existe en el emulador.
-## Push
-
-Sin `google-services.json` / `GoogleService-Info.plist` el servicio queda inactivo y la
-app funciona igual. Al añadir Firebase se activa solo.
+| **VPS (default)** | `https://jeanpiaget.asiscole.com/canal-api/v0.1` |
+| Celular + Django local | `.\run_dispositivo.ps1 -Local` |
+| Emulador + Django local | `--dart-define=API_BASE_URL=http://10.0.2.2:8000/v0.1` |
 
 ## Navegación (RF-K)
 

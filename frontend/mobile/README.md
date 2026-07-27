@@ -16,6 +16,8 @@ incidencias y avisos. El apoderado es **solo receptor**.
 
 - Flutter 3.41 o superior
 - Backend Asiscole en local (`docker compose` + `runserver`)
+- El archivo `android/app/google-services.json` viene en el repo (Firebase cliente).
+  Sin él, Gradle falla en `processDebugGoogleServices`.
 
 ## Cómo correr
 

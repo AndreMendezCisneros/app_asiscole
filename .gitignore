@@ -8,7 +8,7 @@ venv/
 .coverage
 htmlcov/
 
-# Entorno y secretos
+# Entorno y secretos de servidor (nunca en el repo)
 .env
 .env.*
 !.env.example
@@ -16,13 +16,13 @@ htmlcov/
 *.p8
 *.keystore
 *.jks
-google-services.json
-GoogleService-Info.plist
 service-account*.json
 **/credentials*.json
 **/fcm*.json
 secrets/
 *-firebase-adminsdk-*.json
+# google-services.json y GoogleService-Info.plist SÍ se versionan:
+# son config de cliente Firebase y hacen falta para compilar la app.
 
 # Django
 *.sqlite3

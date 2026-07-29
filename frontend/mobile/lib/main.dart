@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -11,20 +10,24 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'app.dart';
 import 'core/config/env.dart';
 import 'core/di/injector.dart';
+import 'core/push/firebase_init.dart';
 import 'core/push/servicio_push.dart';
 import 'features/auth/presentation/auth_cubit.dart';
-import 'firebase_options.dart';
 
 /// Handler en isolate de background (FCM data / notificación).
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage mensaje) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await asegurarFirebaseApp();
 
   final tipo = mensaje.data['tipo']?.toString() ?? '';
   final destino = mensaje.data['destino']?.toString();
 
-  // Siempre mostramos localmente: FCM va en modo data-only para controlar
-  // logo/canal/sonido también con la app cerrada (MIUI).
+  // Con notification+data, en background/killed Play Services pinta el shade.
+  // Este handler cubre data-only residual o mensajes sin bloque notification.
+  if (mensaje.notification != null) {
+    return;
+  }
+
   final locales = FlutterLocalNotificationsPlugin();
   const ajustes = InitializationSettings(
     android: AndroidInitializationSettings('@drawable/ic_stat_asiscole'),
@@ -32,17 +35,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage mensaje) async {
   await locales.initialize(settings: ajustes);
   final android = locales.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
-  await android?.createNotificationChannel(
-    const AndroidNotificationChannel(
-      ServicioPush.canalId,
-      'Avisos del colegio',
-      description: 'Entradas, salidas e incidencias',
-      importance: Importance.max,
-      playSound: true,
-      enableVibration: true,
-      showBadge: true,
-    ),
-  );
+  if (android != null) {
+    await ServicioPush.asegurarCanalAvisos(android);
+  }
 
   final cuerpo = switch (tipo) {
     'entrada' => 'Hay un nuevo aviso de ingreso',
@@ -83,6 +78,8 @@ Future<void> main() async {
   await initializeDateFormatting(Env.locale);
   Intl.defaultLocale = Env.locale;
 
+  // Firebase antes del handler de background para evitar carrera duplicate-app.
+  await asegurarFirebaseApp();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   await configurarInyector();
@@ -92,7 +89,7 @@ Future<void> main() async {
 
   runApp(const AsiscoleApp());
 
-  // Push/Firebase fuera del camino critico de arranque.
+  // Push fuera del camino critico de arranque (Firebase ya está listo).
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(sl<ServicioPush>().iniciar());
   });

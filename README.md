@@ -95,6 +95,7 @@ Compose de producción: `docker-compose.prod.yml` (Redis + gunicorn + Celery).
 La app Flutter en **release** usa `https://jeanpiaget.asiscole.com/canal-api/v0.1`
 (ver `frontend/mobile/lib/core/config/env.dart`).
 
+Despliegue / otro VPS: ver [docs/deploy-vps.md](docs/deploy-vps.md).  
 Push FCM en el VPS: ver [docs/diagnostico-push.md](docs/diagnostico-push.md) y
 `scripts/deploy_push_fcm_vps.sh`. Health debe reportar `"fcm_disponible": true`.
 

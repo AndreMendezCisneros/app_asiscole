@@ -1,18 +1,23 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import '../../firebase_options.dart';
+import 'firebase_init.dart';
 
 /// Notificaciones push. Payload mínimo del backend: tipo, message_id, destino.
 class ServicioPush {
   ServicioPush([FirebaseMessaging? mensajeria]) : _mensajeriaInyectada = mensajeria;
 
-  static const String canalId = 'asiscole_avisos_v2';
+  /// Canal actual. Si Android bloquea uno viejo (IMPORTANCE_NONE), hay que
+  /// subir de versión: el mismo ID no recupera importancia.
+  static const String canalId = 'asiscole_avisos_v3';
+  static const List<String> _canalesObsoletos = [
+    'asiscole_avisos',
+    'asiscole_avisos_v2',
+  ];
   static const String tipoSolicitudTransferencia = 'session_transfer_request';
 
   final FirebaseMessaging? _mensajeriaInyectada;
@@ -48,11 +53,7 @@ class ServicioPush {
 
   Future<void> iniciar() async {
     try {
-      if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-      }
+      await asegurarFirebaseApp();
       _mensajeria = _mensajeriaInyectada ?? FirebaseMessaging.instance;
       final permiso = await _mensajeria!.requestPermission(
         alert: true,
@@ -116,9 +117,27 @@ class ServicioPush {
 
     final android = _locales.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    // Canal con sonido (como WhatsApp). Si el canal ya existía sin sonido,
-    // Android no lo actualiza: hay que borrar la app o el canal en Ajustes.
-    await android?.createNotificationChannel(
+    if (android != null) {
+      await asegurarCanalAvisos(android, purgarObsoletos: true);
+    }
+    await android?.requestNotificationsPermission();
+  }
+
+  /// Crea el canal actual. `purgar_obsoletos` solo en arranque (no en cada push).
+  static Future<void> asegurarCanalAvisos(
+    AndroidFlutterLocalNotificationsPlugin android, {
+    bool purgarObsoletos = false,
+  }) async {
+    if (purgarObsoletos) {
+      for (final id in _canalesObsoletos) {
+        try {
+          await android.deleteNotificationChannel(channelId: id);
+        } on Object {
+          // Canal inexistente: ignorar.
+        }
+      }
+    }
+    await android.createNotificationChannel(
       const AndroidNotificationChannel(
         canalId,
         'Avisos del colegio',
@@ -129,7 +148,6 @@ class ServicioPush {
         showBadge: true,
       ),
     );
-    await android?.requestNotificationsPermission();
   }
 
   void _alRecibir(RemoteMessage mensaje) {

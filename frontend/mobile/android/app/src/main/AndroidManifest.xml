@@ -15,7 +15,7 @@
             android:resource="@color/asiscole_accent" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="asiscole_avisos_v2" />
+            android:value="asiscole_avisos_v3" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

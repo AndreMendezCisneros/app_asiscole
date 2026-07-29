@@ -368,6 +368,8 @@ CIRCUIT_BREAKER_COOLDOWN_SECONDS = env_int("CIRCUIT_BREAKER_COOLDOWN_SECONDS", 3
 
 # Push (rutas a credenciales; el envio lo implementa una fase posterior)
 FCM_CREDENTIALS_PATH = env_str("FCM_CREDENTIALS_PATH")
+# Debe coincidir con ServicioPush.canalId en la app (`asiscole_avisos_v3`).
+FCM_ANDROID_CHANNEL_ID = env_str("FCM_ANDROID_CHANNEL_ID", "asiscole_avisos_v3")
 
 # Clave compartida Asiscole → POST /ingesta/eventos (cabecera X-Asiscole-Ingest-Key).
 # Si está vacía, el endpoint responde 401 a todas las peticiones.

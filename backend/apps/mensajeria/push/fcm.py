@@ -96,16 +96,29 @@ class ProveedorFCM(ProveedorPush):
     def _enviar_lote(self, messaging, lote: list[str], mensaje: MensajePush) -> ResultadoEnvio:
         """Manda un lote y traduce la respuesta del SDK a `ResultadoEnvio`."""
         try:
-            # Solo `data` + prioridad alta: la app muestra la notificación local
-            # (logo, canal, sonido) tanto en foreground como en background/killed.
-            # El bloque `notification` de FCM lo deja al sistema (icono genérico)
-            # y en MIUI a menudo no aparece si el proceso está cerrado.
+            # notification + data: Play Services muestra el shade aunque MIUI
+            # mate el proceso (data-only exige despertar la app y suele fallar).
+            # El texto es genérico (sin PII). El canal v3 lo crea la app al abrir.
+            cuerpo = _cuerpo_generico(mensaje.tipo)
+            canal = (
+                getattr(settings, "FCM_ANDROID_CHANNEL_ID", "") or ""
+            ).strip() or "asiscole_avisos_v3"
             peticion = messaging.MulticastMessage(
                 tokens=lote,
                 data=mensaje.como_datos(),
+                notification=messaging.Notification(
+                    title="Asiscole Messenger",
+                    body=cuerpo,
+                ),
                 android=messaging.AndroidConfig(
                     priority="high",
                     collapse_key=mensaje.message_id,
+                    notification=messaging.AndroidNotification(
+                        channel_id=canal,
+                        priority="max",
+                        default_sound=True,
+                        default_vibrate_timings=True,
+                    ),
                 ),
             )
             respuesta = messaging.send_each_for_multicast(peticion)

@@ -12,6 +12,7 @@ import '../../features/auth/presentation/esperando_aprobacion_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/sesion_denegada_page.dart';
 import '../../features/incidencias/presentation/incidencias_page.dart';
+import '../../features/legal/presentation/terminos_page.dart';
 import '../../features/mensajes/presentation/mensajes_page.dart';
 import '../../features/notas/presentation/notas_page.dart';
 import '../../features/perfil/presentation/perfil_page.dart';
@@ -31,6 +32,7 @@ class Rutas {
   static const String incidencias = '/inicio/incidencias';
   static const String notas = '/inicio/notas';
   static const String perfil = '/inicio/perfil';
+  static const String terminos = '/terminos';
 }
 
 GoRouter crearRouter(AuthCubit auth) {
@@ -41,6 +43,15 @@ GoRouter crearRouter(AuthCubit auth) {
     redirect: (context, estado) => _destino(auth.state, estado.matchedLocation),
     routes: [
       GoRoute(path: Rutas.login, builder: (_, _) => const LoginPage()),
+      GoRoute(
+        path: Rutas.terminos,
+        builder: (_, estado) {
+          final extra = estado.extra;
+          DateTime? aceptados;
+          if (extra is DateTime) aceptados = extra;
+          return TerminosPage(aceptadosEn: aceptados);
+        },
+      ),
       GoRoute(
         path: Rutas.sesionDenegada,
         builder: (_, _) => const SesionDenegadaPage(),
@@ -111,6 +122,9 @@ GoRouter crearRouter(AuthCubit auth) {
 
 String? _destino(AuthState auth, String actual) {
   if (auth is Authenticating) return null;
+
+  // Términos legibles sin sesión (desde login) o con sesión (desde perfil).
+  if (actual == Rutas.terminos) return null;
 
   final tieneSesion = auth is OnlineSync || auth is OfflineMessagesOnly;
 

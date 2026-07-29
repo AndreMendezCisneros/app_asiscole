@@ -2,19 +2,20 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/di/injector.dart';
 import '../../../core/error/api_error.dart';
 import '../../../core/error/error_codes.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/chip_hijo_activo.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
+import '../../../core/widgets/pantalla_carga_asiscole.dart';
+import '../../../core/widgets/selector_hijo_sheet.dart';
 import '../../../core/widgets/tour_asiscole.dart';
+import '../../auth/domain/perfil.dart';
 import '../../perfil/data/perfil_repository.dart';
 import '../data/incidencias_api.dart';
 
@@ -33,6 +34,7 @@ class _IncidenciasPageState extends State<IncidenciasPage>
   EstudianteVinculado? _hijo;
   int? _estudianteId;
   bool _citacionActiva = false;
+  int _epochVisto = 0;
 
   @override
   String get rutaDeEstaSeccion => '/incidencias';
@@ -40,6 +42,9 @@ class _IncidenciasPageState extends State<IncidenciasPage>
   @override
   void initState() {
     super.initState();
+    final repo = sl<PerfilRepository>();
+    _epochVisto = repo.estudianteActivoEpoch.value;
+    repo.estudianteActivoEpoch.addListener(_onEstudianteActivoCambio);
     _cargar();
     unawaited(_cargarFlagCitacion());
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -56,8 +61,27 @@ class _IncidenciasPageState extends State<IncidenciasPage>
 
   @override
   void dispose() {
+    sl<PerfilRepository>()
+        .estudianteActivoEpoch
+        .removeListener(_onEstudianteActivoCambio);
     cancelarListenerRuta();
     super.dispose();
+  }
+
+  void _onEstudianteActivoCambio() {
+    final epoch = sl<PerfilRepository>().estudianteActivoEpoch.value;
+    if (epoch == _epochVisto) return;
+    _epochVisto = epoch;
+    if (!mounted) return;
+    unawaited(_cargar());
+  }
+
+  Future<void> _cambiarHijoDesdeChip() async {
+    await mostrarSelectorHijo(
+      context: context,
+      estudianteActivoId: _estudianteId,
+    );
+    // Recarga vía listener de estudianteActivoEpoch (evita doble fetch).
   }
 
   Future<void> _cargarFlagCitacion() async {
@@ -80,21 +104,40 @@ class _IncidenciasPageState extends State<IncidenciasPage>
     });
     try {
       final repo = sl<PerfilRepository>();
-      final perfil = await repo.obtener();
-      final hijos = await repo.estudiantes();
+      final resultados = await Future.wait([
+        repo.obtener(forzar: true),
+        repo.estudiantes(forzar: true),
+      ]);
+      final perfil = resultados[0] as Perfil;
+      final hijos = resultados[1] as List<EstudianteVinculado>;
       final id = perfil.estudianteActivoId;
       EstudianteVinculado? hijo;
       for (final h in hijos) {
-        if (h.activo || h.id == id) {
+        if (h.id == id) {
           hijo = h;
           break;
         }
+      }
+      if (hijo == null) {
+        for (final h in hijos) {
+          if (h.activo) {
+            hijo = h;
+            break;
+          }
+        }
+        hijo ??= hijos.isEmpty ? null : hijos.first;
+      }
+      // Chip al instante; listado después.
+      if (mounted) {
+        setState(() {
+          _hijo = hijo;
+          _estudianteId = id;
+        });
       }
       if (id == null) {
         setState(() {
           _error = 'Selecciona un estudiante en Perfil.';
           _cargando = false;
-          _hijo = hijo;
         });
         return;
       }
@@ -150,7 +193,7 @@ class _IncidenciasPageState extends State<IncidenciasPage>
                     child: ChipHijoActivo(
                       nombre: _hijo!.nombre,
                       detalle: '${_hijo!.grado} ${_hijo!.seccion}'.trim(),
-                      onCambiar: () => context.go(Rutas.perfil),
+                      onCambiar: () => unawaited(_cambiarHijoDesdeChip()),
                     ),
                   ),
                 if (!_citacionActiva)
@@ -160,7 +203,9 @@ class _IncidenciasPageState extends State<IncidenciasPage>
                   ),
                 Expanded(
                   child: _cargando
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const PantallaCargaAsiscole(
+                          mensaje: 'Cargando incidencias…',
+                        )
                       : _error != null
                           ? Center(
                               child: Padding(

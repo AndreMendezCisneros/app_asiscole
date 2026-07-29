@@ -87,6 +87,8 @@ class LoginView(APIView):
             push_token=datos.get("push_token") or None,
             plataforma=datos.get("plataforma") or None,
             alias=datos.get("alias") or None,
+            acepta_terminos=bool(datos.get("acepta_terminos")),
+            terminos_version=datos.get("terminos_version") or None,
             ip=_ip_de(request),
         )
         return Response(SesionCreadaSerializer(sesion).data)

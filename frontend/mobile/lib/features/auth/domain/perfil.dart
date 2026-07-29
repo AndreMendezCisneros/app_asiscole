@@ -20,6 +20,8 @@ class Perfil extends Equatable {
     required this.estado,
     this.motivoSuspension,
     this.estudianteActivoId,
+    this.terminosVersion,
+    this.terminosAceptadosEn,
   });
 
   final String? alias;
@@ -27,6 +29,8 @@ class Perfil extends Equatable {
   final EstadoCuenta estado;
   final String? motivoSuspension;
   final int? estudianteActivoId;
+  final String? terminosVersion;
+  final DateTime? terminosAceptadosEn;
 
   bool get estaSuspendido => estado == EstadoCuenta.suspendido;
 
@@ -36,6 +40,8 @@ class Perfil extends Equatable {
         estado: EstadoCuenta.desdeApi(json['estado'] as String?),
         motivoSuspension: json['motivo_suspension'] as String?,
         estudianteActivoId: (json['estudiante_activo_id'] as num?)?.toInt(),
+        terminosVersion: json['terminos_version'] as String?,
+        terminosAceptadosEn: _fecha(json['terminos_aceptados_en']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -44,17 +50,39 @@ class Perfil extends Equatable {
         'estado': estado.api,
         'motivo_suspension': motivoSuspension,
         'estudiante_activo_id': estudianteActivoId,
+        'terminos_version': terminosVersion,
+        'terminos_aceptados_en': terminosAceptadosEn?.toUtc().toIso8601String(),
       };
 
-  Perfil copyWith({String? alias, int? estudianteActivoId}) => Perfil(
+  Perfil copyWith({
+    String? alias,
+    int? estudianteActivoId,
+    String? terminosVersion,
+    DateTime? terminosAceptadosEn,
+  }) =>
+      Perfil(
         alias: alias ?? this.alias,
         telefono: telefono,
         estado: estado,
         motivoSuspension: motivoSuspension,
         estudianteActivoId: estudianteActivoId ?? this.estudianteActivoId,
+        terminosVersion: terminosVersion ?? this.terminosVersion,
+        terminosAceptadosEn: terminosAceptadosEn ?? this.terminosAceptadosEn,
       );
 
   @override
-  List<Object?> get props =>
-      [alias, telefono, estado, motivoSuspension, estudianteActivoId];
+  List<Object?> get props => [
+        alias,
+        telefono,
+        estado,
+        motivoSuspension,
+        estudianteActivoId,
+        terminosVersion,
+        terminosAceptadosEn,
+      ];
+
+  static DateTime? _fecha(Object? crudo) {
+    if (crudo is! String || crudo.isEmpty) return null;
+    return DateTime.tryParse(crudo);
+  }
 }

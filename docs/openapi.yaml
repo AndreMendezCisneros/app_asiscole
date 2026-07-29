@@ -79,7 +79,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [telefono, documento_estudiante, device_id]
+              required: [telefono, documento_estudiante, device_id, acepta_terminos, terminos_version]
               properties:
                 telefono:
                   type: string
@@ -103,6 +103,13 @@ paths:
                 alias:
                   type: string
                   description: Nombre para mostrar, opcional (RF-A06)
+                acepta_terminos:
+                  type: boolean
+                  description: Debe ser true; el apoderado acepta T&C y política de privacidad
+                terminos_version:
+                  type: string
+                  description: Versión del documento legal aceptado (p. ej. 2026-07-28)
+                  example: "2026-07-28"
       responses:
         "200":
           description: Sesión creada
@@ -931,6 +938,15 @@ components:
           enum: [activo, suspendido]
         motivo_suspension: { type: string, nullable: true }
         estudiante_activo_id: { type: integer, nullable: true }
+        terminos_version:
+          type: string
+          nullable: true
+          description: Versión de T&C aceptada (null si aún no aceptó en esta cuenta)
+        terminos_aceptados_en:
+          type: string
+          format: date-time
+          nullable: true
+          description: Momento en que aceptó la versión vigente
 
     EstudianteVinculado:
       type: object

@@ -58,6 +58,23 @@ class FechasLima {
 
   static tz.Location get _lima => tz.getLocation(Env.zonaHoraria);
 
+  // DateFormat es caro de construir; se reutiliza en listas/scroll.
+  static DateFormat? _fmtHm;
+  static DateFormat? _fmtFechaLarga;
+  static DateFormat? _fmtHoraAmPm;
+  static DateFormat? _fmtFechaHoraAmPm;
+  static DateFormat? _fmtDiaMesCorto;
+
+  static DateFormat get _hm => _fmtHm ??= DateFormat.Hm(Env.locale);
+  static DateFormat get _fechaLarga =>
+      _fmtFechaLarga ??= DateFormat("d 'de' MMMM 'de' y", Env.locale);
+  static DateFormat get _horaAmPmFmt =>
+      _fmtHoraAmPm ??= DateFormat('h:mm a', Env.locale);
+  static DateFormat get _fechaHoraAmPmFmt =>
+      _fmtFechaHoraAmPm ??= DateFormat("d 'de' MMMM, h:mm a", Env.locale);
+  static DateFormat get diaMesCorto =>
+      _fmtDiaMesCorto ??= DateFormat('d MMM', Env.locale);
+
   static DateTime enLima(DateTime utc) =>
       tz.TZDateTime.from(utc.toUtc(), _lima);
 
@@ -77,18 +94,14 @@ class FechasLima {
     );
   }
 
-  static String hora(DateTime utc) =>
-      DateFormat.Hm(Env.locale).format(_civil(utc));
+  static String hora(DateTime utc) => _hm.format(_civil(utc));
 
-  static String fechaLarga(DateTime utc) =>
-      DateFormat("d 'de' MMMM 'de' y", Env.locale).format(_civil(utc));
+  static String fechaLarga(DateTime utc) => _fechaLarga.format(_civil(utc));
 
-  static String horaAmPm(DateTime utc) {
-    return DateFormat('h:mm a', Env.locale).format(_civil(utc));
-  }
+  static String horaAmPm(DateTime utc) => _horaAmPmFmt.format(_civil(utc));
 
   static String fechaHoraAmPm(DateTime utc) =>
-      DateFormat("d 'de' MMMM, h:mm a", Env.locale).format(_civil(utc));
+      _fechaHoraAmPmFmt.format(_civil(utc));
 
   /// Cuenta regresiva `m:ss`.
   static String cuentaRegresiva(Duration restante) {

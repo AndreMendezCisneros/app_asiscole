@@ -56,9 +56,33 @@ def test_login_correcto_emite_ambos_tokens_y_crea_la_sesion(api, vinculo_en_dire
     assert perfil["telefono"] != TELEFONO
     assert perfil["telefono"].startswith("+51")
     assert perfil["estudiante_activo_id"] == vinculo_en_directorio.id_estudiante
+    assert perfil["terminos_version"] == "2026-07-28"
+    assert perfil["terminos_aceptados_en"] is not None
 
     assert PushToken.objects.filter(activo=True, device_id=DEVICE_A).count() == 1
     assert IntentoLogin.objects.filter(exitoso=True).count() == 1
+
+
+def test_login_sin_aceptar_terminos_devuelve_400(api, vinculo_en_directorio):
+    """Sin consentimiento no se crea sesión."""
+    respuesta = api.post(
+        URL_LOGIN,
+        cuerpo_login(acepta_terminos=False),
+        format="json",
+    )
+    assert respuesta.status_code == 400
+    assert respuesta.json()["code"] == "VALIDATION_ERROR"
+    assert not SesionActiva.objects.exists()
+
+
+def test_login_con_version_terminos_distinta_devuelve_400(api, vinculo_en_directorio):
+    respuesta = api.post(
+        URL_LOGIN,
+        cuerpo_login(terminos_version="1999-01-01"),
+        format="json",
+    )
+    assert respuesta.status_code == 400
+    assert not SesionActiva.objects.exists()
 
 
 def test_documento_que_no_coincide_devuelve_404(api, vinculo_en_directorio):

@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../core/device/info_dispositivo.dart';
 import '../../../core/error/api_error.dart';
 import '../../../core/error/error_codes.dart';
+import '../../../core/legal/terminos_legales.dart';
 import '../domain/perfil.dart';
 import '../domain/sesion.dart';
 import '../domain/solicitud_transferencia.dart';
@@ -42,6 +43,8 @@ class AuthRepository {
         modelo: datos.modelo,
         sistemaOperativo: datos.sistemaOperativo,
         pushToken: await _pushToken(),
+        aceptaTerminos: true,
+        terminosVersion: TerminosLegales.version,
       );
       await _almacen.guardarSesion(sesion);
       return sesion;

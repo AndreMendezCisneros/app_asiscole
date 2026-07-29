@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/di/injector.dart';
 import '../../../core/push/servicio_push.dart';
@@ -14,6 +13,7 @@ import '../../../core/widgets/chip_hijo_activo.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
 import '../../../core/widgets/filter_chip_row.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
+import '../../../core/widgets/pantalla_carga_asiscole.dart';
 import '../../../core/widgets/search_field_asiscole.dart';
 import '../../../core/widgets/tour_asiscole.dart';
 import '../../perfil/data/perfil_repository.dart';
@@ -39,12 +39,14 @@ class _Vista extends StatefulWidget {
   State<_Vista> createState() => _VistaState();
 }
 
-class _VistaState extends State<_Vista> with CierraSheetAlCambiarTab {
+class _VistaState extends State<_Vista>
+    with CierraSheetAlCambiarTab, WidgetsBindingObserver {
   StreamSubscription<void>? _avisos;
   final _busqueda = TextEditingController();
   String _filtro = 'todos';
   String _consulta = '';
   String? _filtroColegio;
+  int? _filtroHijoId;
   Timer? _debounceBusqueda;
   List<EstudianteVinculado> _hijos = [];
 
@@ -54,6 +56,7 @@ class _VistaState extends State<_Vista> with CierraSheetAlCambiarTab {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _avisos = sl<ServicioPush>().avisosDeMensaje.listen((_) {
       if (mounted) {
         context.read<MensajesCubit>().cargar(silencioso: true);
@@ -72,6 +75,14 @@ class _VistaState extends State<_Vista> with CierraSheetAlCambiarTab {
     });
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      // Sin FCM el listado no se entera solo; al volver a la app refrescamos.
+      context.read<MensajesCubit>().cargar(silencioso: true);
+    }
+  }
+
   Future<void> _cargarHijos() async {
     try {
       final hijos = await sl<PerfilRepository>().estudiantes();
@@ -83,6 +94,7 @@ class _VistaState extends State<_Vista> with CierraSheetAlCambiarTab {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     cancelarListenerRuta();
     _debounceBusqueda?.cancel();
     _avisos?.cancel();
@@ -110,6 +122,8 @@ class _VistaState extends State<_Vista> with CierraSheetAlCambiarTab {
 
   bool get _mostrarFiltroColegio => _colegiosDistintos.length >= 2;
 
+  bool get _mostrarFiltroHijo => _hijos.length >= 2;
+
   EstudianteVinculado? get _hijoActivo {
     for (final h in _hijos) {
       if (h.activo) return h;
@@ -117,9 +131,17 @@ class _VistaState extends State<_Vista> with CierraSheetAlCambiarTab {
     return _hijos.isEmpty ? null : _hijos.first;
   }
 
+  String _primerNombre(String nombre) {
+    final partes = nombre.trim().split(RegExp(r'\s+'));
+    return partes.isEmpty ? nombre : partes.first;
+  }
+
   List<Mensaje> _filtrar(List<Mensaje> items) {
     return items.where((m) {
       if (_filtro == 'no_leidos' && m.leido) return false;
+      if (_filtroHijoId != null && m.estudianteId != _filtroHijoId) {
+        return false;
+      }
       if (_filtroColegio != null &&
           (m.colegio ?? '').trim() != _filtroColegio) {
         return false;
@@ -153,7 +175,9 @@ class _VistaState extends State<_Vista> with CierraSheetAlCambiarTab {
                   next is MensajesCargando,
               builder: (context, state) {
                 if (state is MensajesCargando) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const PantallaCargaAsiscole(
+                    mensaje: 'Cargando mensajes…',
+                  );
                 }
                 if (state is MensajesError) {
                   return EmptyStateAsiscole(mensaje: state.mensaje);
@@ -211,6 +235,31 @@ class _VistaState extends State<_Vista> with CierraSheetAlCambiarTab {
                         ],
                       ),
                     ),
+                    if (_mostrarFiltroHijo) ...[
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: FilterChipRow(
+                          selectedId: _filtroHijoId?.toString() ?? 'todos_hijos',
+                          onSelected: (id) => setState(() {
+                            _filtroHijoId =
+                                id == 'todos_hijos' ? null : int.tryParse(id);
+                          }),
+                          items: [
+                            const FilterChipItem(
+                              id: 'todos_hijos',
+                              label: 'Todos los hijos',
+                            ),
+                            ..._hijos.map(
+                              (h) => FilterChipItem(
+                                id: h.id.toString(),
+                                label: _primerNombre(h.nombre),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (_mostrarFiltroColegio) ...[
                       const SizedBox(height: 8),
                       Padding(
@@ -250,42 +299,49 @@ class _VistaState extends State<_Vista> with CierraSheetAlCambiarTab {
                                   onRefresh: () => context
                                       .read<MensajesCubit>()
                                       .cargar(silencioso: true),
-                                  child: ListView.separated(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      12,
-                                      8,
-                                      12,
-                                      24,
-                                    ),
-                                    itemCount: filtrados.length,
-                                    cacheExtent: 480,
-                                    separatorBuilder: (_, _) =>
-                                        const SizedBox(height: 4),
-                                    itemBuilder: (context, i) {
-                                      final m = filtrados[i];
-                                      final lima = FechasLima.enLima(m.emitidoEn);
+                                  child: Builder(
+                                    builder: (context) {
                                       final ahoraLima = FechasLima.enLima(
                                         DateTime.now().toUtc(),
                                       );
-                                      final mismaFecha =
-                                          lima.year == ahoraLima.year &&
-                                              lima.month == ahoraLima.month &&
-                                              lima.day == ahoraLima.day;
-                                      final marca = mismaFecha
-                                          ? FechasLima.horaAmPm(m.emitidoEn)
-                                          : DateFormat('d MMM', 'es_PE')
-                                              .format(
-                                                DateTime(
-                                                  lima.year,
-                                                  lima.month,
-                                                  lima.day,
-                                                ),
-                                              );
-                                      return _FilaMensaje(
-                                        key: ValueKey(m.id),
-                                        mensaje: m,
-                                        marcaTiempo: marca,
-                                        onTap: () => _detalle(m),
+                                      return ListView.separated(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          12,
+                                          8,
+                                          12,
+                                          24,
+                                        ),
+                                        itemCount: filtrados.length,
+                                        cacheExtent: 720,
+                                        separatorBuilder: (_, _) =>
+                                            const SizedBox(height: 4),
+                                        itemBuilder: (context, i) {
+                                          final m = filtrados[i];
+                                          final lima =
+                                              FechasLima.enLima(m.emitidoEn);
+                                          final mismaFecha =
+                                              lima.year == ahoraLima.year &&
+                                                  lima.month ==
+                                                      ahoraLima.month &&
+                                                  lima.day == ahoraLima.day;
+                                          final marca = mismaFecha
+                                              ? FechasLima.horaAmPm(
+                                                  m.emitidoEn,
+                                                )
+                                              : FechasLima.diaMesCorto.format(
+                                                  DateTime(
+                                                    lima.year,
+                                                    lima.month,
+                                                    lima.day,
+                                                  ),
+                                                );
+                                          return _FilaMensaje(
+                                            key: ValueKey(m.id),
+                                            mensaje: m,
+                                            marcaTiempo: marca,
+                                            onTap: () => _detalle(m),
+                                          );
+                                        },
                                       );
                                     },
                                   ),
@@ -325,21 +381,18 @@ class _FilaMensaje extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (letra, color) = _estiloTipo(mensaje.tipo);
-    final subtitulo = [
-      if (mensaje.estudianteNombre != null &&
-          mensaje.estudianteNombre!.isNotEmpty)
-        mensaje.estudianteNombre!,
-      if (mensaje.colegio != null && mensaje.colegio!.isNotEmpty)
-        mensaje.colegio!,
-    ].join(' · ');
+    final (icono, color, etiqueta) = _estiloTipo(mensaje.tipo);
+    final nombreHijo = (mensaje.estudianteNombre ?? '').trim();
+    final primerNombre = nombreHijo.isEmpty
+        ? ''
+        : nombreHijo.split(RegExp(r'\s+')).first;
 
     return Material(
       color: AppTheme.blanco,
       borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
@@ -347,15 +400,8 @@ class _FilaMensaje extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 26,
-                backgroundColor: color.withValues(alpha: 0.18),
-                child: Text(
-                  letra,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
+                backgroundColor: color.withValues(alpha: 0.16),
+                child: Icon(icono, color: color, size: 26),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -364,18 +410,25 @@ class _FilaMensaje extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Expanded(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           child: Text(
-                            _tituloTipo(mensaje.tipo),
+                            etiqueta,
                             style: TextStyle(
-                              fontWeight: mensaje.leido
-                                  ? FontWeight.w600
-                                  : FontWeight.w800,
-                              color: AppTheme.texto,
-                              fontSize: 15,
+                              color: color,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
                             ),
                           ),
                         ),
+                        const Spacer(),
                         Text(
                           marcaTiempo,
                           style: const TextStyle(
@@ -385,16 +438,32 @@ class _FilaMensaje extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (subtitulo.isNotEmpty) ...[
+                    if (primerNombre.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        primerNombre,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppTheme.texto,
+                          fontSize: 15,
+                          fontWeight: mensaje.leido
+                              ? FontWeight.w700
+                              : FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                    if (mensaje.colegio != null &&
+                        mensaje.colegio!.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
-                        subtitulo,
+                        mensaje.colegio!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: AppTheme.moradoSecundario,
+                          color: AppTheme.textoSecundario,
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -463,20 +532,16 @@ class _FilaMensaje extends StatelessWidget {
     );
   }
 
-  static (String, Color) _estiloTipo(String tipo) => switch (tipo) {
-        'entrada' => ('E', AppTheme.celeste),
-        'salida' => ('S', AppTheme.moradoSecundario),
-        'incidencia' => ('I', AppTheme.moradoPrincipal),
-        'aviso' => ('A', AppTheme.moradoClaro),
-        _ => ('M', AppTheme.textoSecundario),
-      };
-
-  static String _tituloTipo(String tipo) => switch (tipo) {
-        'entrada' => 'Entrada',
-        'salida' => 'Salida',
-        'incidencia' => 'Incidencia',
-        'aviso' => 'Aviso',
-        _ => 'Mensaje',
+  static (IconData, Color, String) _estiloTipo(String tipo) => switch (tipo) {
+        'entrada' => (Icons.login_rounded, AppTheme.verdeEntrada, 'Entrada'),
+        'salida' => (Icons.logout_rounded, AppTheme.indigoSalida, 'Salida'),
+        'incidencia' => (
+            Icons.warning_amber_rounded,
+            AppTheme.ambarIncidencia,
+            'Incidencia',
+          ),
+        'aviso' => (Icons.campaign_outlined, AppTheme.moradoSecundario, 'Aviso'),
+        _ => (Icons.mail_outline, AppTheme.textoSecundario, 'Mensaje'),
       };
 }
 
@@ -516,7 +581,7 @@ class _DetalleMensajeSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              _FilaMensaje._tituloTipo(mensaje.tipo),
+              _FilaMensaje._estiloTipo(mensaje.tipo).$3,
               style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 color: AppTheme.texto,

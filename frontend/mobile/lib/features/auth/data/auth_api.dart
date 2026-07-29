@@ -18,6 +18,8 @@ class AuthApi {
     String? sistemaOperativo,
     String? pushToken,
     String? alias,
+    required bool aceptaTerminos,
+    required String terminosVersion,
   }) async {
     final respuesta = await _dio.post<Map<String, dynamic>>(
       '/auth/login',
@@ -30,6 +32,8 @@ class AuthApi {
         'sistema_operativo': ?sistemaOperativo,
         'push_token': ?pushToken,
         if (alias != null && alias.isNotEmpty) 'alias': alias,
+        'acepta_terminos': aceptaTerminos,
+        'terminos_version': terminosVersion,
       },
     );
     return Sesion.fromJson(respuesta.data ?? const {});

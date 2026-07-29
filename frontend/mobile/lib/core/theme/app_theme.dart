@@ -8,6 +8,9 @@ class AppTheme {
   static const Color moradoSecundario = Color(0xFF7C3AED);
   static const Color moradoClaro = Color(0xFFA855F7);
   static const Color celeste = Color(0xFF22C7F2);
+  static const Color verdeEntrada = Color(0xFF059669);
+  static const Color indigoSalida = Color(0xFF4338CA);
+  static const Color ambarIncidencia = Color(0xFFD97706);
   static const Color texto = Color(0xFF0F172A);
   static const Color textoSecundario = Color(0xFF475569);
   static const Color fondo = Color(0xFFF8FAFC);
@@ -16,7 +19,7 @@ class AppTheme {
 
   /// Compatibilidad con código antiguo.
   static const Color azulInstitucional = moradoPrincipal;
-  static const Color ambar = Color(0xFFB26A00);
+  static const Color ambar = ambarIncidencia;
 
   static ThemeData get claro => _claro;
   static ThemeData get oscuro => _oscuro;

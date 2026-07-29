@@ -126,6 +126,8 @@ def construir_perfil(apoderado: Apoderado, estudiante_activo_id: int | None = No
         "estado": apoderado.estado,
         "motivo_suspension": apoderado.motivo_suspension,
         "estudiante_activo_id": estudiante_activo_id,
+        "terminos_version": apoderado.terminos_version,
+        "terminos_aceptados_en": apoderado.terminos_aceptados_en,
     }
 
 
@@ -293,6 +295,8 @@ def login(
     push_token: str | None = None,
     plataforma: str | None = None,
     alias: str | None = None,
+    acepta_terminos: bool = False,
+    terminos_version: str | None = None,
     ip: str | None = None,
 ) -> SesionEmitida:
     """Inicia sesion en el canal (RF-A01 a RF-A05).
@@ -306,13 +310,15 @@ def login(
         push_token: Token de notificaciones, si el cliente ya lo tiene.
         plataforma: `android` o `ios`.
         alias: Nombre para mostrar (RF-A06).
+        acepta_terminos: Debe ser True (T&C + privacidad).
+        terminos_version: Version del documento legal aceptado.
         ip: IP de origen, para el control de fuerza bruta.
 
     Returns:
         La sesion creada con sus dos tokens y el perfil.
 
     Raises:
-        ValidationError: El telefono o el `device_id` no son utilizables.
+        ValidationError: El telefono, device_id o el consentimiento no son validos.
         AccountLocked: Bloqueo temporal por intentos fallidos.
         StudentLinkNotFound: No hay vinculo telefono-documento.
         AccountSuspended: La cuenta esta suspendida.
@@ -320,6 +326,11 @@ def login(
         UpstreamSchoolDbUnavailable: No se pudo verificar el vinculo.
     """
     if not (device_id or "").strip():
+        raise ValidationError()
+
+    version_vigente = (getattr(settings, "TERMINOS_VERSION", "") or "").strip()
+    version_cliente = (terminos_version or "").strip()
+    if not acepta_terminos or not version_cliente or version_cliente != version_vigente:
         raise ValidationError()
 
     # 1. Normalizacion.
@@ -344,6 +355,12 @@ def login(
         with transaction.atomic():
             # 5. Cuenta.
             apoderado = _obtener_o_crear_apoderado(telefono_e164, alias)
+            ahora = timezone.now()
+            apoderado.terminos_version = version_vigente
+            apoderado.terminos_aceptados_en = ahora
+            apoderado.save(
+                update_fields=["terminos_version", "terminos_aceptados_en", "actualizado_en"]
+            )
 
             # 6. Politica de sesion unica.
             sesion_vigente = _sesion_activa_de(apoderado)

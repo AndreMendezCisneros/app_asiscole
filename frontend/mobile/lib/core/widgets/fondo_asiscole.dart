@@ -1,8 +1,4 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-
-import '../theme/app_theme.dart';
 
 /// Variantes de fondo decorativo por pantalla (mismas manchas de marca,
 /// distinta composición).
@@ -23,15 +19,18 @@ class FondoAsiscole extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: switch (estilo) {
-        FondoEstilo.login => const _ComposicionLogin(),
-        FondoEstilo.mensajes => const _ComposicionMensajes(),
-        FondoEstilo.asistencias => const _ComposicionAsistencias(),
-        FondoEstilo.incidencias => const _ComposicionIncidencias(),
-        FondoEstilo.notas => const _ComposicionNotas(),
-        FondoEstilo.perfil => const _ComposicionPerfil(),
-      },
+    // Aísla el fondo del scroll: evita repintar las manchas en cada frame.
+    return RepaintBoundary(
+      child: IgnorePointer(
+        child: switch (estilo) {
+          FondoEstilo.login => const _ComposicionLogin(),
+          FondoEstilo.mensajes => const _ComposicionMensajes(),
+          FondoEstilo.asistencias => const _ComposicionAsistencias(),
+          FondoEstilo.incidencias => const _ComposicionIncidencias(),
+          FondoEstilo.notas => const _ComposicionNotas(),
+          FondoEstilo.perfil => const _ComposicionPerfil(),
+        },
+      ),
     );
   }
 }
@@ -97,35 +96,27 @@ class _ComposicionMensajes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    // Sin Transform: menos capas al componer bajo el ListView.
+    return const Stack(
       children: [
         Positioned(
           top: -40,
           left: -100,
-          child: Transform.scale(
-            scaleX: 1.5,
-            child: const _Bola(size: 160, color: Color(0x245B21E6)),
-          ),
+          child: _Bola(size: 200, color: Color(0x245B21E6)),
         ),
         Positioned(
           top: 200,
           right: -70,
-          child: Transform.rotate(
-            angle: -0.35,
-            child: Container(
-              width: 200,
-              height: 110,
-              decoration: BoxDecoration(
-                color: AppTheme.celeste.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(80),
-              ),
-            ),
+          child: _Bola(
+            size: 140,
+            color: Color(0x1F22C7F2),
+            borderRadius: BorderRadius.all(Radius.circular(70)),
           ),
         ),
         Positioned(
           bottom: 120,
           left: 40,
-          child: const _Bola(size: 90, color: Color(0x1FA855F7)),
+          child: _Bola(size: 90, color: Color(0x1FA855F7)),
         ),
       ],
     );
@@ -181,39 +172,29 @@ class _ComposicionIncidencias extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return const Stack(
       children: [
         Positioned(
-          top: 60,
-          right: -90,
-          child: Transform.rotate(
-            angle: math.pi / 5,
-            child: Container(
-              width: 240,
-              height: 70,
-              decoration: BoxDecoration(
-                color: AppTheme.moradoPrincipal.withValues(alpha: 0.09),
-                borderRadius: BorderRadius.circular(40),
-              ),
-            ),
+          top: 40,
+          right: -80,
+          child: _Bola(
+            size: 180,
+            color: Color(0x175B21E6),
+            borderRadius: BorderRadius.all(Radius.circular(60)),
+            angulo: 0.55,
           ),
         ),
         Positioned(
-          top: 160,
-          right: -50,
-          child: Transform.rotate(
-            angle: math.pi / 5,
-            child: Container(
-              width: 180,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppTheme.moradoClaro.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(30),
-              ),
-            ),
+          top: 150,
+          right: -40,
+          child: _Bola(
+            size: 120,
+            color: Color(0x1FA855F7),
+            borderRadius: BorderRadius.all(Radius.circular(40)),
+            angulo: 0.55,
           ),
         ),
-        const Positioned(
+        Positioned(
           bottom: -40,
           left: -50,
           child: _Bola(size: 200, color: Color(0x1A22C7F2)),
@@ -229,38 +210,32 @@ class _ComposicionNotas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return const Stack(
       children: [
         Positioned(
           top: -100,
           left: 40,
-          child: Container(
-            width: 280,
-            height: 180,
-            decoration: BoxDecoration(
-              color: AppTheme.moradoClaro.withValues(alpha: 0.14),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(140),
-                bottomRight: Radius.circular(140),
-              ),
+          child: _Bola(
+            size: 280,
+            color: Color(0x24A855F7),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(140),
+              bottomRight: Radius.circular(140),
             ),
           ),
         ),
         Positioned(
           bottom: 60,
           right: -80,
-          child: Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              color: AppTheme.celeste.withValues(alpha: 0.10),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(120),
-              ),
+          child: _Bola(
+            size: 200,
+            color: Color(0x1A22C7F2),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(120),
             ),
           ),
         ),
-        const Positioned(
+        Positioned(
           bottom: 200,
           left: -30,
           child: _Bola(size: 60, color: Color(0x1E7C3AED)),

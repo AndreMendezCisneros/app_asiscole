@@ -111,16 +111,18 @@ cd frontend/mobile
 
 ```powershell
 cd frontend/mobile
-flutter pub get
-flutter build apk --release
+.\tool\build_apk.ps1
 ```
 
-El artefacto queda en:
+(Eso asegura Firebase desde `secrets/`, compila release y deja el archivo con el
+nombre de distribución.)
 
-`build/app/outputs/flutter-apk/app-release.apk`
+Artefacto para instalar / compartir:
 
-Se puede renombrar a `Asiscole_Messenger.apk` para distribución. El nombre visible
-en el dispositivo (launcher) es **Asiscole Messenger** (`AndroidManifest`).
+`build/app/outputs/flutter-apk/Asiscole_Messenger.apk`
+
+Flutter también genera `app-release.apk` (mismo contenido); es el nombre interno
+de Gradle. El nombre visible en el dispositivo (launcher) es **Asiscole Messenger**.
 
 ## Navegación (RF-K)
 

@@ -105,6 +105,8 @@ class Apoderado(models.Model):
     suspendido_en = models.DateTimeField(null=True, blank=True)
     estudiante_activo_id = models.IntegerField(null=True, blank=True)
     estudiante_activo_tenant = models.TextField(null=True, blank=True)
+    terminos_version = models.TextField(null=True, blank=True)
+    terminos_aceptados_en = models.DateTimeField(null=True, blank=True)
     creado_en = models.DateTimeField(default=timezone.now)
     actualizado_en = models.DateTimeField(auto_now=True)
 

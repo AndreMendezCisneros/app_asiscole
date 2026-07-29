@@ -27,6 +27,8 @@ class LoginSerializer(serializers.Serializer):
         choices=["android", "ios"], required=False, allow_blank=True
     )
     alias = serializers.CharField(max_length=128, required=False, allow_blank=True)
+    acepta_terminos = serializers.BooleanField()
+    terminos_version = serializers.CharField(max_length=32)
 
 
 class AdminLoginSerializer(serializers.Serializer):
@@ -54,6 +56,8 @@ class PerfilSerializer(serializers.Serializer):
     estado = serializers.CharField()
     motivo_suspension = serializers.CharField(allow_null=True)
     estudiante_activo_id = serializers.IntegerField(allow_null=True)
+    terminos_version = serializers.CharField(allow_null=True)
+    terminos_aceptados_en = serializers.DateTimeField(allow_null=True)
 
 
 class SesionCreadaSerializer(serializers.Serializer):

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/error/api_error.dart';
 import '../../auth/domain/perfil.dart';
@@ -37,14 +38,24 @@ class PerfilRepository {
 
   Perfil? _perfilCache;
   DateTime? _perfilCacheEn;
-  static const _ttlPerfil = Duration(seconds: 45);
+  List<EstudianteVinculado>? _estudiantesCache;
+  DateTime? _estudiantesCacheEn;
+  static const _ttl = Duration(seconds: 45);
+
+  /// Se incrementa al cambiar el estudiante activo para que otras pestañas
+  /// (IndexedStack) recarguen sin ir a Perfil.
+  final ValueNotifier<int> estudianteActivoEpoch = ValueNotifier(0);
+
+  void _avisarCambioEstudianteActivo() {
+    estudianteActivoEpoch.value++;
+  }
 
   Future<Perfil> obtener({bool forzar = false}) async {
     final ahora = DateTime.now();
     if (!forzar &&
         _perfilCache != null &&
         _perfilCacheEn != null &&
-        ahora.difference(_perfilCacheEn!) < _ttlPerfil) {
+        ahora.difference(_perfilCacheEn!) < _ttl) {
       return _perfilCache!;
     }
     try {
@@ -58,15 +69,29 @@ class PerfilRepository {
     }
   }
 
-  Future<List<EstudianteVinculado>> estudiantes() async {
+  Future<List<EstudianteVinculado>> estudiantes({bool forzar = false}) async {
+    final ahora = DateTime.now();
+    if (!forzar &&
+        _estudiantesCache != null &&
+        _estudiantesCacheEn != null &&
+        ahora.difference(_estudiantesCacheEn!) < _ttl) {
+      return _estudiantesCache!;
+    }
     try {
       final resp = await _dio.get<Map<String, dynamic>>('/perfil/estudiantes');
       final crudos = resp.data?['items'];
-      if (crudos is! List) return [];
-      return crudos
+      if (crudos is! List) {
+        _estudiantesCache = [];
+        _estudiantesCacheEn = ahora;
+        return [];
+      }
+      final lista = crudos
           .whereType<Map>()
           .map((e) => EstudianteVinculado.fromJson(Map<String, dynamic>.from(e)))
           .toList();
+      _estudiantesCache = lista;
+      _estudiantesCacheEn = ahora;
+      return lista;
     } on DioException catch (e) {
       throw ApiError.deDio(e);
     }
@@ -81,6 +106,24 @@ class PerfilRepository {
       final perfil = Perfil.fromJson(resp.data!);
       _perfilCache = perfil;
       _perfilCacheEn = DateTime.now();
+      _estudiantesCache = null;
+      _estudiantesCacheEn = null;
+      _avisarCambioEstudianteActivo();
+      return perfil;
+    } on DioException catch (e) {
+      throw ApiError.deDio(e);
+    }
+  }
+
+  Future<Perfil> actualizarAlias(String alias) async {
+    try {
+      final resp = await _dio.patch<Map<String, dynamic>>(
+        '/perfil',
+        data: {'alias': alias.trim()},
+      );
+      final perfil = Perfil.fromJson(resp.data!);
+      _perfilCache = perfil;
+      _perfilCacheEn = DateTime.now();
       return perfil;
     } on DioException catch (e) {
       throw ApiError.deDio(e);
@@ -90,6 +133,8 @@ class PerfilRepository {
   void invalidarCache() {
     _perfilCache = null;
     _perfilCacheEn = null;
+    _estudiantesCache = null;
+    _estudiantesCacheEn = null;
     _ultimoTokenPush = null;
   }
 

@@ -139,10 +139,14 @@ def crear_sesion(apoderado_obj: Apoderado, device_id: str = DEVICE_A, **extra) -
 
 def cuerpo_login(**extra) -> dict:
     """Cuerpo minimo valido de `POST /v0.1/auth/login`."""
+    from django.conf import settings
+
     cuerpo = {
         "telefono": TELEFONO,
         "documento_estudiante": DOCUMENTO,
         "device_id": DEVICE_A,
+        "acepta_terminos": True,
+        "terminos_version": settings.TERMINOS_VERSION,
     }
     cuerpo.update(extra)
     return cuerpo

@@ -6,6 +6,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
+import '../../../core/widgets/pantalla_carga_asiscole.dart';
 import '../../../core/widgets/tour_asiscole.dart';
 
 /// Pantalla de Notas (RF-H): visible, desactivada por feature flag remoto.
@@ -81,7 +82,7 @@ class _NotasPageState extends State<NotasPage> {
                 Expanded(
                   child: Center(
                     child: _cargando
-                        ? const CircularProgressIndicator()
+                        ? const PantallaCargaAsiscole(mensaje: 'Cargando notas…')
                         : _activo
                             ? const EmptyStateAsiscole(
                                 mensaje:

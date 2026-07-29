@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formato.dart';
 import '../../../core/widgets/asiscole_logo.dart';
@@ -22,6 +24,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formulario = GlobalKey<FormState>();
   final _telefono = TextEditingController();
   final _documento = TextEditingController();
+  bool _aceptaTerminos = false;
 
   static const _radioCampo = BorderRadius.all(Radius.circular(18));
 
@@ -34,6 +37,14 @@ class _LoginPageState extends State<LoginPage> {
 
   void _enviar() {
     FocusScope.of(context).unfocus();
+    if (!_aceptaTerminos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes aceptar los términos y la política de privacidad.'),
+        ),
+      );
+      return;
+    }
     if (!(_formulario.currentState?.validate() ?? false)) return;
     context.read<AuthCubit>().iniciarSesion(
           telefono: TelefonoPeru.aE164(_telefono.text),
@@ -269,10 +280,56 @@ class _LoginPageState extends State<LoginPage> {
                                     ? 'Ingresa el documento del estudiante.'
                                     : null,
                           ),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 20),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Checkbox(
+                                value: _aceptaTerminos,
+                                onChanged: cargando
+                                    ? null
+                                    : (v) => setState(
+                                          () => _aceptaTerminos = v ?? false,
+                                        ),
+                                activeColor: AppTheme.moradoPrincipal,
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: Wrap(
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    children: [
+                                      const Text(
+                                        'Acepto los ',
+                                        style: TextStyle(
+                                          color: AppTheme.texto,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      GestureDetector(
+                                        onTap: () => context.push(Rutas.terminos),
+                                        child: const Text(
+                                          'términos y la política de privacidad',
+                                          style: TextStyle(
+                                            color: AppTheme.moradoPrincipal,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13,
+                                            decoration: TextDecoration.underline,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
                           _BotonIngresar(
                             cargando: cargando,
-                            onPressed: cargando ? null : _enviar,
+                            onPressed: cargando || !_aceptaTerminos
+                                ? null
+                                : _enviar,
                           ),
                           const SizedBox(height: 24),
                           const PanelAviso(

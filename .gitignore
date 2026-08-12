@@ -12,6 +12,9 @@ htmlcov/
 .env
 .env.*
 !.env.example
+!.env.production.example
+*.tar
+frontend/mobile/android/build/
 *.pem
 *.p8
 *.keystore

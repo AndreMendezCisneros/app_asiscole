@@ -7,14 +7,18 @@ class MensajesApi {
 
   final Dio _dio;
 
-  Future<({List<Mensaje> items, Map<String, int> badges})> listar({
+  Future<({List<Mensaje> items, Map<String, int> badges, String? nextCursor})>
+      listar({
     String? since,
+    String? cursor,
+    int limit = 100,
   }) async {
     final resp = await _dio.get<Map<String, dynamic>>(
       '/mensajes',
       queryParameters: {
-        'since': ?since,
-        'limit': 100,
+        if (since != null) 'since': since,
+        if (cursor != null) 'cursor': cursor,
+        'limit': limit,
       },
     );
     final data = resp.data ?? {};
@@ -27,7 +31,8 @@ class MensajesApi {
         (k, v) => MapEntry(k.toString(), (v as num).toInt()),
       ),
     );
-    return (items: items, badges: badges);
+    final next = data['next_cursor'] as String?;
+    return (items: items, badges: badges, nextCursor: next);
   }
 
   Future<void> marcarLeidos(List<String> ids) async {

@@ -1,6 +1,10 @@
 # Cambios pendientes (producto / arquitectura)
 
-Notas de conversación. Actualizado 2026-07-26.
+Notas de conversación. Actualizado 2026-07-30.
+
+**Producción JP (cutover, APK, SSL detrás de Caddy):** ya operativos — ver
+[`estado-produccion.md`](estado-produccion.md). Lo de abajo es producto / SIE,
+no deuda del cutover.
 
 ---
 
@@ -42,8 +46,17 @@ activo en Perfil.
 
 ---
 
+## 4. Hecho en infra / app (2026-07-30) — no pendiente
+
+- Cutover prod: Redis auth, secret rotado, migraciones `0005`/`0002`, RLS `007`.
+- `DJANGO_SECURE_SSL_REDIRECT=False` detrás de Caddy (ADR-10).
+- App: URL VPS por defecto también en debug; menos falsos “offline” en MIUI.
+- APK release: `Asiscole_Messenger.apk` vía `scripts/ops_local_release.ps1`.
+
 ## Orden siguiente
 
 1. Cablear SIE JP → `POST /ingesta/eventos` (prioridad).
 2. Modelo limpio N:M con `padres_estudiantes` / `asis_*`.
-3. Cubits Flutter para asistencias/incidencias + detalle de incidencia.
+3. Cubits Flutter para asistencias/incidencias + detalle de incidencia (si aún
+   faltan frente al OpenAPI).
+4. Cuando haya VPS dedicado 32 GB: subir workers a Opción B (estado-produccion §6).

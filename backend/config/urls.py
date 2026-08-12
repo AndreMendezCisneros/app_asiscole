@@ -6,6 +6,7 @@ cliente consume una ruta que no este antes en ``docs/openapi.yaml``.
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -36,15 +37,6 @@ def health(request: HttpRequest) -> JsonResponse:
 
 urlpatterns = [
     path("health", health, name="health"),
-    # Documentacion del contrato
-    path("v0.1/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path(
-        "v0.1/docs/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
-        name="docs",
-    ),
-    # Apps del canal. Varias siguen con `urlpatterns = []`; se incluyen desde ya
-    # para que anadir un endpoint no obligue a tocar este archivo.
     path("v0.1/", include("apps.cuentas.urls")),
     path("v0.1/", include("apps.directorio.urls")),
     path("v0.1/", include("apps.mensajeria.urls")),
@@ -52,3 +44,14 @@ urlpatterns = [
     path("v0.1/", include("apps.ingesta.urls")),
     path("v0.1/", include("apps.administracion.urls")),
 ]
+
+# Swagger/OpenAPI solo con DEBUG=True. En producción el contrato no se sirve.
+if settings.DEBUG:
+    urlpatterns += [
+        path("v0.1/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path(
+            "v0.1/docs/",
+            SpectacularSwaggerView.as_view(url_name="schema"),
+            name="docs",
+        ),
+    ]

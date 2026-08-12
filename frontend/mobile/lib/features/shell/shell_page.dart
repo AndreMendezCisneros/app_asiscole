@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../auth/presentation/auth_cubit.dart';
+import '../auth/presentation/auth_state.dart';
 
 /// Contenedor con barra inferior flotante (RF-K).
+///
+/// Offline (`OfflineMessagesOnly`): solo la pestaña Mensajes es usable;
+/// el resto queda deshabilitado (regla de producto: solo caché de mensajes).
 class ShellPage extends StatelessWidget {
   const ShellPage({required this.navigationShell, super.key});
 
@@ -54,28 +60,82 @@ class ShellPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final indice = navigationShell.currentIndex;
-    return Scaffold(
-      backgroundColor: AppTheme.fondo,
-      body: navigationShell,
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-          decoration: _decoNav,
-          child: Row(
+    return BlocBuilder<AuthCubit, AuthState>(
+      buildWhen: (prev, next) =>
+          prev.runtimeType != next.runtimeType ||
+          (prev is OfflineMessagesOnly) != (next is OfflineMessagesOnly),
+      builder: (context, auth) {
+        final soloMensajes = auth is OfflineMessagesOnly;
+        if (soloMensajes && indice != 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            navigationShell.goBranch(0);
+          });
+        }
+        return Scaffold(
+          backgroundColor: AppTheme.fondo,
+          body: Column(
             children: [
-              for (var i = 0; i < _destinos.length; i++)
-                Expanded(
-                  child: _ItemNav(
-                    destino: _destinos[i],
-                    activo: i == indice,
-                    onTap: () => navigationShell.goBranch(i),
+              if (soloMensajes)
+                Material(
+                  color: const Color(0xFFFFF3CD),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.wifi_off,
+                            size: 18,
+                            color: Color(0xFF856404),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Sin conexión — solo mensajes guardados',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                color: const Color(0xFF856404),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
+              Expanded(child: navigationShell),
             ],
           ),
-        ),
-      ),
+          bottomNavigationBar: SafeArea(
+            minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              decoration: _decoNav,
+              child: Row(
+                children: [
+                  for (var i = 0; i < _destinos.length; i++)
+                    Expanded(
+                      child: _ItemNav(
+                        destino: _destinos[i],
+                        activo: i == indice,
+                        habilitado: !soloMensajes || i == 0,
+                        onTap: () {
+                          if (soloMensajes && i != 0) return;
+                          navigationShell.goBranch(i);
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -97,26 +157,32 @@ class _ItemNav extends StatelessWidget {
     required this.destino,
     required this.activo,
     required this.onTap,
+    this.habilitado = true,
   });
 
   final _DestinoNav destino;
   final bool activo;
+  final bool habilitado;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = activo ? AppTheme.moradoPrincipal : AppTheme.textoSecundario;
+    final color = !habilitado
+        ? AppTheme.textoSecundario.withValues(alpha: 0.35)
+        : activo
+            ? AppTheme.moradoPrincipal
+            : AppTheme.textoSecundario;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: habilitado ? onTap : null,
         borderRadius: BorderRadius.circular(20),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           decoration: BoxDecoration(
-            color: activo
+            color: activo && habilitado
                 ? const Color(0x38A855F7)
                 : Colors.transparent,
             borderRadius: const BorderRadius.all(Radius.circular(20)),

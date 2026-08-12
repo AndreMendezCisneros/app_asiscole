@@ -11,8 +11,9 @@ class LocalDb {
   LocalDb({String nombreArchivo = 'asiscole.db'})
       : _nombreArchivo = nombreArchivo;
 
-  static const int _version = 5;
+  static const int _version = 6;
   static const String tablaMensajes = 'mensajes';
+  static const String tablaLeidosPendientes = 'leidos_pendientes';
 
   final String _nombreArchivo;
   Database? _db;
@@ -47,12 +48,25 @@ class LocalDb {
     await db.execute(
       'CREATE INDEX idx_mensajes_emitido_en ON $tablaMensajes (emitido_en DESC)',
     );
+    await db.execute('''
+      CREATE TABLE $tablaLeidosPendientes (
+        id TEXT PRIMARY KEY
+      )
+    ''');
   }
 
   /// v2–v5: vaciar caché tras correcciones de `emitido_en` (UTC canónico).
+  /// v6: cola de leídos pendientes de reenviar al API.
   Future<void> _actualizar(Database db, int anterior, int nueva) async {
     if (anterior < 5) {
       await db.delete(tablaMensajes);
+    }
+    if (anterior < 6) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS $tablaLeidosPendientes (
+          id TEXT PRIMARY KEY
+        )
+      ''');
     }
   }
 
@@ -107,10 +121,41 @@ class LocalDb {
     );
   }
 
+  Future<void> encolarLeidosPendientes(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    final lote = db.batch();
+    for (final id in ids) {
+      lote.insert(
+        tablaLeidosPendientes,
+        {'id': id},
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+    await lote.commit(noResult: true);
+  }
+
+  Future<List<String>> leidosPendientes() async {
+    final db = await database;
+    final filas = await db.query(tablaLeidosPendientes);
+    return filas.map((f) => f['id']! as String).toList();
+  }
+
+  Future<void> quitarLeidosPendientes(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    final marcadores = List.filled(ids.length, '?').join(',');
+    await db.rawDelete(
+      'DELETE FROM $tablaLeidosPendientes WHERE id IN ($marcadores)',
+      ids,
+    );
+  }
+
   /// La caché la borra el apoderado; el cierre de sesión no la toca.
   Future<void> vaciar() async {
     final db = await database;
     await db.delete(tablaMensajes);
+    await db.delete(tablaLeidosPendientes);
   }
 
   Future<void> cerrar() async {

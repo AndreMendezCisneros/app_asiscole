@@ -95,6 +95,39 @@ def reintentar_push_pendientes(
     return enviados
 
 
+@shared_task(
+    name="apps.mensajeria.tasks.reintentar_push_pendientes_task",
+    ignore_result=True,
+)
+def reintentar_push_pendientes_task(
+    apoderado_id: int, limite: int = MAX_REINTENTO_PENDIENTES
+) -> int:
+    """Variante Celery: no bloquea el request de login/registro de token."""
+    try:
+        apoderado = Apoderado.objects.get(pk=apoderado_id)
+    except Apoderado.DoesNotExist:
+        return 0
+    return reintentar_push_pendientes(apoderado, limite=limite)
+
+
+def encolar_reintento_push_pendientes(apoderado_id: int) -> None:
+    """Encola el reintento; si Celery/broker no está, ejecuta en proceso."""
+    try:
+        reintentar_push_pendientes_task.delay(apoderado_id)
+    except Exception:  # noqa: BLE001 — degradación: no tumbar login
+        logger.warning(
+            "push_reintento_encola_fallo",
+            extra={"apoderado_id": apoderado_id},
+        )
+        try:
+            reintentar_push_pendientes_task(apoderado_id)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "push_reintento_sync_fallo",
+                extra={"apoderado_id": apoderado_id},
+            )
+
+
 @shared_task(name="apps.mensajeria.tasks.purgar_mensajes_vencidos", ignore_result=True)
 def purgar_mensajes_vencidos() -> dict[str, int]:
     """Anonimiza mensajes que superaron MESSAGE_RETENTION_MONTHS (RNF-11)."""

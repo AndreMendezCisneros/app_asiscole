@@ -72,6 +72,11 @@ class Directorio(models.Model):
         indexes = [
             # Camino caliente del login: "que estudiantes tiene este telefono".
             models.Index(fields=["telefono"], name="asis_idx_directorio_telefono"),
+            # Ingesta: apoderados destino por estudiante en un colegio.
+            models.Index(
+                fields=["tenant_id", "id_estudiante"],
+                name="asis_idx_dir_tenant_est",
+            ),
         ]
 
     def __str__(self) -> str:

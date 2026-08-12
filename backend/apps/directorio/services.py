@@ -251,6 +251,13 @@ def resolver_vinculos(telefono_e164: str) -> list[VinculoDTO]:
         logger.debug("directorio_hit_central", extra={"vinculos": len(persistidos)})
         return persistidos
 
+    # Si la central ya conoce el teléfono pero solo tiene vínculos inactivos,
+    # no hace falta (ni conviene) fan-out a colegios: la respuesta es "sin vínculo".
+    if Directorio.objects.filter(telefono=telefono_e164).exists():
+        cache_directorio.escribir_cache(telefono_e164, [])
+        logger.debug("directorio_solo_inactivos")
+        return []
+
     # 3. Las BDs de colegio, en paralelo.
     resultado = resolver_en_colegios(telefono_e164)
     activos = [v for v in resultado.vinculos if v.activo]

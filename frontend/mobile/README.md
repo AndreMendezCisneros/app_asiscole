@@ -71,13 +71,14 @@ App Asiscole Messenger (APK)
 ```
 
 Health del backend: https://jeanpiaget.asiscole.com/canal-api/health  
-Docs: https://jeanpiaget.asiscole.com/canal-api/v0.1/docs/
+Swagger (`/v0.1/docs/`) solo con `DJANGO_DEBUG=True` (no se sirve en producción).
 
 ## Cómo correr
 
 ### Producción / VPS (por defecto)
 
-La app apunta a `https://jeanpiaget.asiscole.com/canal-api/v0.1` en debug y release.
+Por defecto (debug y release) → VPS de producción.  
+Django local: `.\run_dispositivo.ps1 -Local` o `--dart-define=ASISCOLE_ENV=dev` (emulador `10.0.2.2`).
 
 ```powershell
 cd frontend/mobile
@@ -109,17 +110,35 @@ cd frontend/mobile
 
 ## Generar APK (Asiscole Messenger)
 
+Desde la raíz del repo (recomendado; también consulta health del VPS):
+
+```powershell
+.\scripts\ops_local_release.ps1
+```
+
+O solo la app:
+
 ```powershell
 cd frontend/mobile
 .\tool\build_apk.ps1
 ```
 
-(Eso asegura Firebase desde `secrets/`, compila release y deja el archivo con el
-nombre de distribución.)
+Asegura Firebase desde `secrets/`, release con ofuscación Dart + R8, y deja el
+archivo con el nombre de distribución.
 
-Artefacto para instalar / compartir:
+Para firma de Play Store: copia `android/key.properties.example` →
+`android/key.properties` y apunta a tu keystore (gitignored). Sin eso, el APK
+release se firma con la clave de debug (solo pruebas / sideload).
+
+Artefacto:
 
 `build/app/outputs/flutter-apk/Asiscole_Messenger.apk`
+
+Estado de producción, cutover y por qué un APK viejo podía mostrar “sin
+conexión”: [`docs/estado-produccion.md`](../../docs/estado-produccion.md).
+
+Tras rotar `DJANGO_SECRET_KEY` en el VPS, hay que **borrar datos de la app** e
+iniciar sesión de nuevo (las sesiones JWT quedan inválidas).
 
 Flutter también genera `app-release.apk` (mismo contenido); es el nombre interno
 de Gradle. El nombre visible en el dispositivo (launcher) es **Asiscole Messenger**.

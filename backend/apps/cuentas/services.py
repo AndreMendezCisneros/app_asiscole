@@ -15,6 +15,7 @@ Reglas que gobiernan todo este modulo:
 from __future__ import annotations
 
 import logging
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -156,9 +157,9 @@ def _guardar_push_token(
         device_id=device_id,
         defaults={"token": token, "plataforma": plataforma, "activo": True},
     )
-    from apps.mensajeria.tasks import reintentar_push_pendientes
+    from apps.mensajeria.tasks import encolar_reintento_push_pendientes
 
-    reintentar_push_pendientes(apoderado)
+    encolar_reintento_push_pendientes(apoderado.pk)
 
 
 def _obtener_o_crear_apoderado(identidad: str, alias: str | None = None) -> Apoderado:
@@ -631,6 +632,7 @@ def solicitar_transferencia(
                 apoderado=apoderado,
                 from_device_id=sesion_vigente.device_id,
                 to_device_id=device_id,
+                token_consulta=secrets.token_urlsafe(32),
                 estado=TRANSFERENCIA_PENDIENTE,
                 expira_en=timezone.now()
                 + timedelta(minutes=settings.TRANSFER_REQUEST_TTL_MINUTES),
@@ -725,16 +727,26 @@ def rechazar_transferencia(
     return transferencia
 
 
-def consultar_transferencia(id_transferencia: int) -> TransferenciaSesion:
+def consultar_transferencia(
+    id_transferencia: int, *, token_consulta: str
+) -> TransferenciaSesion:
     """Consulta el estado de una solicitud desde el dispositivo solicitante.
 
+    Exige el `token_consulta` emitido al crear la solicitud (anti-IDOR).
+
     Raises:
-        TransferExpired: La solicitud vencio (y se marca `expired` al pasar).
+        TransferExpired: La solicitud vencio o el token no coincide.
     """
+    token = (token_consulta or "").strip()
+    if not token:
+        raise TransferExpired()
     try:
         transferencia = TransferenciaSesion.objects.get(pk=id_transferencia)
     except (TransferenciaSesion.DoesNotExist, ValueError, TypeError) as exc:
         raise TransferExpired() from exc
+
+    if not transferencia.token_consulta or transferencia.token_consulta != token:
+        raise TransferExpired()
 
     if transferencia.estado == TRANSFERENCIA_PENDIENTE and transferencia.vencida:
         transferencia.estado = TRANSFERENCIA_EXPIRADA

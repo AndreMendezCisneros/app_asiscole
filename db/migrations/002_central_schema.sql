@@ -1,8 +1,10 @@
 -- =============================================================================
 -- 002_central_schema.sql - SE EJECUTA EN LA BASE DE DATOS CENTRAL DEL CANAL
 -- =============================================================================
--- PostgreSQL propio del canal apoderado (NO es Supabase, no hay PostgREST ni RLS
--- de por medio: el unico cliente es el backend Django).
+-- BD central del canal (en prod suele ser un proyecto Supabase dedicado).
+-- El unico cliente de aplicacion es Django (rol de servicio / BYPASSRLS).
+-- Si la central vive en Supabase, aplicar tambien 007_central_rls_lockdown.sql
+-- (RLS deny-all + REVOKE anon/authenticated) o desactivar la Data API.
 --
 -- QUIEN MANDA: Django es el dueno del esquema. En produccion estas tablas las crean
 -- y evolucionan las migraciones de Django. Este archivo es la REFERENCIA CANONICA
@@ -76,6 +78,9 @@ CREATE TABLE IF NOT EXISTS public.asis_directorio (
 -- request; este indice es el camino caliente.
 CREATE INDEX IF NOT EXISTS asis_idx_directorio_telefono
   ON public.asis_directorio (telefono);
+
+CREATE INDEX IF NOT EXISTS asis_idx_dir_tenant_est
+  ON public.asis_directorio (tenant_id, id_estudiante);
 
 COMMENT ON TABLE public.asis_directorio IS
   'Vinculo telefono <-> estudiante <-> colegio. Replica minima del dato del colegio, '

@@ -82,12 +82,13 @@ class SolicitudTransferenciaRespuestaSerializer(serializers.Serializer):
 
     El `id` viaja como cadena porque el contrato lo declara `string`. La PK de
     `asis_transferencia_sesion` es un BIGSERIAL, asi que se serializa su valor
-    en texto.
+    en texto. `token_consulta` solo se conoce al crear la solicitud.
     """
 
     id = serializers.SerializerMethodField()
     estado = serializers.CharField()
     expira_en = serializers.DateTimeField()
+    token_consulta = serializers.CharField(allow_null=True, required=False)
 
     def get_id(self, obj) -> str:
         """Devuelve el identificador de la solicitud como cadena."""

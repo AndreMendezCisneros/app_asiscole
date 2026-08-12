@@ -75,6 +75,17 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 if DEBUG and "*" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS = list({*ALLOWED_HOSTS, "*", "10.0.2.2"})
 
+# Producción: nunca arrancar con la clave por defecto (firma JWT HS256).
+_SECRETOS_PROHIBIDOS = {"", "cambiar-en-produccion", "changeme", "secret", "django-insecure"}
+if not DEBUG and (
+    SECRET_KEY.strip().lower() in _SECRETOS_PROHIBIDOS or len(SECRET_KEY.strip()) < 32
+):
+    sys.stderr.write(
+        "FATAL: DJANGO_SECRET_KEY ausente, por defecto o demasiado corta "
+        "(mín. 32 caracteres) con DJANGO_DEBUG=False.\n"
+    )
+    sys.exit(1)
+
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
@@ -428,8 +439,11 @@ USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 if not DEBUG:
-    SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
-    # La sonda de vida la consulta el orquestador por HTTP plano: no se redirige.
-    SECURE_REDIRECT_EXEMPT = [r"^health$"]
+    # Por defecto OFF: Caddy/Cloudflare ya terminan TLS. Si Django redirige a
+    # https://host/v0.1/... se pierde el prefijo /canal-api y la app recibe el
+    # HTML del SIE (síntoma: "sin conexión" / login raro). Solo activar si el
+    # origin sirve HTTPS directo sin proxy.
+    SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
+    SECURE_REDIRECT_EXEMPT = [r"^health$", r"^v0\.1/"]
     SECURE_HSTS_SECONDS = env_int("DJANGO_SECURE_HSTS_SECONDS", 31536000)
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True

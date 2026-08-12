@@ -7,7 +7,7 @@ import logging
 from django.db.models import Q
 
 from apps.administracion.models import FeatureFlag
-from apps.common.errors import ValidationError
+from apps.common.errors import RoleNotAllowed, ValidationError
 from apps.cuentas.models import (
     CUENTA_ACTIVA,
     CUENTA_SUSPENDIDA,
@@ -15,6 +15,7 @@ from apps.cuentas.models import (
     SESION_ACTIVA,
     Apoderado,
     SesionActiva,
+    partes_identidad_administrador,
 )
 from apps.cuentas.services import enmascarar_telefono
 from apps.cuentas.suspension import forzar_cierre_sesion, reactivar, suspender
@@ -26,6 +27,29 @@ from apps.mensajeria.plantillas.registry import renderizar
 logger = logging.getLogger("asiscole.administracion")
 
 
+def tenant_del_admin(admin: Apoderado) -> str:
+    """Extrae el tenant_id embebido en `admin:{tenant}:{id_usuario}`."""
+    partes = partes_identidad_administrador(admin.telefono)
+    if partes is None:
+        raise RoleNotAllowed()
+    return partes[0]
+
+
+def _apoderado_del_tenant(apoderado_id: int, tenant_id: str) -> Apoderado:
+    """Carga un apoderado solo si tiene vínculo activo en el tenant del admin."""
+    apo = Apoderado.objects.filter(pk=apoderado_id).first()
+    if apo is None or apo.es_administrador:
+        raise ValidationError("No se encontró la cuenta indicada.")
+    if not Directorio.objects.filter(
+        telefono=apo.telefono,
+        tenant_id=tenant_id,
+        estado_vinculo=VINCULO_ACTIVO,
+    ).exists():
+        # Misma respuesta que "no existe": no filtrar por tenant en el mensaje.
+        raise ValidationError("No se encontró la cuenta indicada.")
+    return apo
+
+
 def listar_flags() -> dict[str, bool]:
     """Devuelve los flags; garantiza `notas` y `citacion` en false por defecto."""
     FeatureFlag.objects.get_or_create(clave="notas", defaults={"activo": False})
@@ -35,13 +59,22 @@ def listar_flags() -> dict[str, bool]:
 
 def listar_apoderados(
     *,
+    tenant_id: str,
     buscar: str | None = None,
     estado: str | None = None,
     cursor: str | None = None,
     limite: int = 50,
 ) -> dict:
-    qs = Apoderado.objects.exclude(telefono__startswith=PREFIJO_IDENTIDAD_ADMIN).exclude(
-        estado="eliminado"
+    """Lista apoderados con al menos un vínculo activo en `tenant_id`."""
+    telefonos_tenant = Directorio.objects.filter(
+        tenant_id=tenant_id,
+        estado_vinculo=VINCULO_ACTIVO,
+    ).values_list("telefono", flat=True)
+
+    qs = (
+        Apoderado.objects.filter(telefono__in=telefonos_tenant)
+        .exclude(telefono__startswith=PREFIJO_IDENTIDAD_ADMIN)
+        .exclude(estado="eliminado")
     )
     if estado in (CUENTA_ACTIVA, CUENTA_SUSPENDIDA):
         qs = qs.filter(estado=estado)
@@ -76,7 +109,9 @@ def listar_apoderados(
                 "activo": apo.estudiante_activo_id == v.id_estudiante,
             }
             for v in Directorio.objects.filter(
-                telefono=apo.telefono, estado_vinculo=VINCULO_ACTIVO
+                telefono=apo.telefono,
+                tenant_id=tenant_id,
+                estado_vinculo=VINCULO_ACTIVO,
             )[:20]
         ]
         items.append(
@@ -103,32 +138,32 @@ def suspender_cuenta(
     *,
     motivo: str,
     actor: str | None,
+    tenant_id: str,
     notificar_push: bool = True,
 ) -> None:
     if not motivo or len(motivo.strip()) < 5:
         raise ValidationError("El motivo debe tener al menos 5 caracteres.")
-    apo = Apoderado.objects.filter(pk=apoderado_id).first()
-    if apo is None or apo.es_administrador:
-        raise ValidationError("No se encontró la cuenta indicada.")
+    apo = _apoderado_del_tenant(apoderado_id, tenant_id)
     suspender(apo, motivo.strip(), actor=actor, notificar_push=notificar_push)
 
 
-def reactivar_cuenta(apoderado_id: int, *, actor: str | None) -> None:
-    apo = Apoderado.objects.filter(pk=apoderado_id).first()
-    if apo is None or apo.es_administrador:
-        raise ValidationError("No se encontró la cuenta indicada.")
+def reactivar_cuenta(
+    apoderado_id: int, *, actor: str | None, tenant_id: str
+) -> None:
+    apo = _apoderado_del_tenant(apoderado_id, tenant_id)
     reactivar(apo, actor=actor)
 
 
-def cerrar_sesion_cuenta(apoderado_id: int, *, actor: str | None) -> None:
-    apo = Apoderado.objects.filter(pk=apoderado_id).first()
-    if apo is None or apo.es_administrador:
-        raise ValidationError("No se encontró la cuenta indicada.")
+def cerrar_sesion_cuenta(
+    apoderado_id: int, *, actor: str | None, tenant_id: str
+) -> None:
+    apo = _apoderado_del_tenant(apoderado_id, tenant_id)
     forzar_cierre_sesion(apo, actor=actor)
 
 
 def enviar_aviso(
     *,
+    tenant_id: str,
     texto: str,
     nivel: str | None = None,
     grado: str | None = None,
@@ -139,7 +174,10 @@ def enviar_aviso(
     if not cuerpo:
         raise ValidationError("El texto del aviso es obligatorio.")
 
-    qs = Directorio.objects.filter(estado_vinculo=VINCULO_ACTIVO)
+    qs = Directorio.objects.filter(
+        estado_vinculo=VINCULO_ACTIVO,
+        tenant_id=tenant_id,
+    )
     if nivel:
         qs = qs.filter(nivel=nivel)
     if grado:
@@ -163,7 +201,7 @@ def enviar_aviso(
     for apo in apoderados:
         mensaje = Mensaje.objects.create(
             apoderado=apo,
-            tenant_id="institucional",
+            tenant_id=tenant_id,
             id_estudiante=None,
             tipo=TIPO_AVISO,
             texto=redactado,
@@ -173,5 +211,8 @@ def enviar_aviso(
         enviar_push_mensaje.delay(str(mensaje.pk))
         creados += 1
 
-    logger.info("aviso_encolado", extra={"destinatarios": creados})
+    logger.info(
+        "aviso_encolado",
+        extra={"destinatarios": creados, "tenant_id": tenant_id},
+    )
     return {"destinatarios": creados}

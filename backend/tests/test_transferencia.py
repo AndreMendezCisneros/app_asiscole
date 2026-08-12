@@ -29,8 +29,11 @@ URL_SOLICITAR = "/v0.1/auth/session-transfer/request"
 pytestmark = pytest.mark.django_db
 
 
-def _url_transferencia(id_transferencia, sufijo: str = "") -> str:
-    return f"/v0.1/auth/session-transfer/{id_transferencia}{sufijo}"
+def _url_transferencia(id_transferencia, sufijo: str = "", *, token: str | None = None) -> str:
+    base = f"/v0.1/auth/session-transfer/{id_transferencia}{sufijo}"
+    if token and not sufijo:
+        return f"{base}?token={token}"
+    return base
 
 
 def _cuerpo_solicitud(device_id: str = DEVICE_B) -> dict:
@@ -55,11 +58,15 @@ def test_flujo_completo_solicitar_aprobar_y_entrar(api, vinculo_en_directorio):
     solicitud = api.post(URL_SOLICITAR, _cuerpo_solicitud(), format="json")
     assert solicitud.status_code == 202
     cuerpo = solicitud.json()
-    assert set(cuerpo) == {"id", "estado", "expira_en"}
+    assert set(cuerpo) == {"id", "estado", "expira_en", "token_consulta"}
     assert cuerpo["estado"] == TRANSFERENCIA_PENDIENTE
+    assert cuerpo["token_consulta"]
+
+    # Sin token → 410 (anti-IDOR).
+    assert api.get(_url_transferencia(cuerpo["id"])).status_code == 410
 
     # B consulta el estado mientras espera.
-    consulta = api.get(_url_transferencia(cuerpo["id"]))
+    consulta = api.get(_url_transferencia(cuerpo["id"], token=cuerpo["token_consulta"]))
     assert consulta.status_code == 200
     assert consulta.json()["estado"] == TRANSFERENCIA_PENDIENTE
 
@@ -87,12 +94,14 @@ def test_transferencia_expirada_devuelve_410(api, vinculo_en_directorio):
     token_a = primero.json()["session_token"]
 
     solicitud = api.post(URL_SOLICITAR, _cuerpo_solicitud(), format="json")
-    id_transferencia = solicitud.json()["id"]
+    cuerpo = solicitud.json()
+    id_transferencia = cuerpo["id"]
+    token = cuerpo["token_consulta"]
 
     # Se envejece la solicitud mas alla de su TTL.
     TransferenciaSesion.objects.update(expira_en=timezone.now() - timedelta(seconds=1))
 
-    consulta = api.get(_url_transferencia(id_transferencia))
+    consulta = api.get(_url_transferencia(id_transferencia, token=token))
     assert consulta.status_code == 410
     assert consulta.json()["code"] == "TRANSFER_EXPIRED"
     assert TransferenciaSesion.objects.get().estado == TRANSFERENCIA_EXPIRADA

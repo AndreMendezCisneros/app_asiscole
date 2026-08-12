@@ -63,8 +63,10 @@ class ApoderadosAdminView(APIView):
         ],
     )
     def get(self, request: Request) -> Response:
+        tenant_id = services.tenant_del_admin(request.apoderado)
         return Response(
             services.listar_apoderados(
+                tenant_id=tenant_id,
                 buscar=request.query_params.get("buscar"),
                 estado=request.query_params.get("estado"),
                 cursor=request.query_params.get("cursor"),
@@ -80,10 +82,12 @@ class SuspenderView(APIView):
     def post(self, request: Request, id: int) -> Response:
         ser = SuspenderSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+        tenant_id = services.tenant_del_admin(request.apoderado)
         services.suspender_cuenta(
             id,
             motivo=ser.validated_data["motivo"],
             actor=f"admin:{request.apoderado.pk}",
+            tenant_id=tenant_id,
             notificar_push=ser.validated_data.get("notificar_push", True),
         )
         return Response(status=204)
@@ -95,7 +99,10 @@ class ReactivarView(APIView):
 
     @extend_schema(tags=["admin"], responses={204: None})
     def post(self, request: Request, id: int) -> Response:
-        services.reactivar_cuenta(id, actor=f"admin:{request.apoderado.pk}")
+        tenant_id = services.tenant_del_admin(request.apoderado)
+        services.reactivar_cuenta(
+            id, actor=f"admin:{request.apoderado.pk}", tenant_id=tenant_id
+        )
         return Response(status=204)
 
 
@@ -105,7 +112,10 @@ class CerrarSesionView(APIView):
 
     @extend_schema(tags=["admin"], responses={204: None})
     def post(self, request: Request, id: int) -> Response:
-        services.cerrar_sesion_cuenta(id, actor=f"admin:{request.apoderado.pk}")
+        tenant_id = services.tenant_del_admin(request.apoderado)
+        services.cerrar_sesion_cuenta(
+            id, actor=f"admin:{request.apoderado.pk}", tenant_id=tenant_id
+        )
         return Response(status=204)
 
 
@@ -117,5 +127,8 @@ class AvisosView(APIView):
     def post(self, request: Request) -> Response:
         ser = AvisoSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        datos = services.enviar_aviso(**ser.validated_data)
+        tenant_id = services.tenant_del_admin(request.apoderado)
+        datos = services.enviar_aviso(
+            tenant_id=tenant_id, **ser.validated_data
+        )
         return Response(datos, status=202)

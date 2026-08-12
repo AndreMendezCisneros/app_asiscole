@@ -13,7 +13,7 @@ from apps.mensajeria.plantillas.base import ErrorDePlantilla
 
 logger = logging.getLogger("asiscole.ingesta")
 
-TIPOS_PERMITIDOS = frozenset({"entrada", "salida", "incidencia"})
+TIPOS_PERMITIDOS = frozenset({"entrada", "salida", "incidencia", "aviso"})
 
 
 def recibir_evento(
@@ -37,7 +37,7 @@ def recibir_evento(
     if tenant_id not in settings.SCHOOL_TENANTS:
         raise ValidationError("El colegio indicado no está configurado en el canal.")
     if tipo not in TIPOS_PERMITIDOS:
-        raise ValidationError("tipo debe ser entrada, salida o incidencia.")
+        raise ValidationError("tipo debe ser entrada, salida, incidencia o aviso.")
     if id_estudiante is None or int(id_estudiante) <= 0:
         raise ValidationError("id_estudiante inválido.")
     if id_registro is None or int(id_registro) <= 0:

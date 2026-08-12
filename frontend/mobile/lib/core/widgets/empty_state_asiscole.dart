@@ -3,16 +3,20 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'asiscole_logo.dart';
 
-/// Estado vacío / offline compartido.
+/// Estado vacío / error reutilizable.
 class EmptyStateAsiscole extends StatelessWidget {
   const EmptyStateAsiscole({
     super.key,
     required this.mensaje,
     this.mostrarLogo = true,
+    this.onReintentar,
+    this.etiquetaReintentar = 'Reintentar',
   });
 
   final String mensaje;
   final bool mostrarLogo;
+  final VoidCallback? onReintentar;
+  final String etiquetaReintentar;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +39,13 @@ class EmptyStateAsiscole extends StatelessWidget {
                 height: 1.4,
               ),
             ),
+            if (onReintentar != null) ...[
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: onReintentar,
+                child: Text(etiquetaReintentar),
+              ),
+            ],
           ],
         ),
       ),

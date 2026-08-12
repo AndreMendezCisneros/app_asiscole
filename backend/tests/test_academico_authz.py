@@ -30,3 +30,30 @@ def test_vinculo_ok():
     )
     v = vinculo_estudiante(apo, 7)
     assert v.id_estudiante == 7
+
+
+@pytest.mark.django_db
+def test_vinculo_prefiere_tenant_activo():
+    apo = Apoderado.objects.create(
+        telefono="+51944444446",
+        estudiante_activo_id=7,
+        estudiante_activo_tenant="colegio_b",
+    )
+    Directorio.objects.create(
+        telefono=apo.telefono,
+        tenant_id="colegio_a",
+        id_estudiante=7,
+        codigo_barras="70000008",
+        nombre_estudiante="Hijo A",
+        estado_vinculo=VINCULO_ACTIVO,
+    )
+    Directorio.objects.create(
+        telefono=apo.telefono,
+        tenant_id="colegio_b",
+        id_estudiante=7,
+        codigo_barras="70000009",
+        nombre_estudiante="Hijo B",
+        estado_vinculo=VINCULO_ACTIVO,
+    )
+    v = vinculo_estudiante(apo, 7)
+    assert v.tenant_id == "colegio_b"

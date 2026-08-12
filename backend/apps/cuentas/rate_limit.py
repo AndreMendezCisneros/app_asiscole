@@ -93,6 +93,34 @@ def _debe_bloquear(fallos: int) -> bool:
     return fallos >= _maximo_intentos()
 
 
+def _cache_es_locmem() -> bool:
+    """True si el backend de cache no necesita Redis (tests / runserver)."""
+    backend = (settings.CACHES.get("default") or {}).get("BACKEND", "")
+    return "locmem" in backend.lower() or "dummy" in backend.lower()
+
+
+def _asegurar_cache_auth() -> None:
+    """Fail-closed: sin cache usable no se permite login (anti fuerza bruta).
+
+    Con `IGNORE_EXCEPTIONS` Redis caído hace que get/set fallen en silencio.
+    Aquí se detecta y se responde 429 en lugar de abrir el login.
+    """
+    if _cache_es_locmem():
+        return
+    try:
+        sonda = f"{_PREFIJO}:probe:{int(time.time() * 1000) % 1_000_000}"
+        cache.set(sonda, 1, timeout=5)
+        if cache.get(sonda) != 1:
+            raise RuntimeError("cache_probe_fallida")
+        cache.delete(sonda)
+    except Exception as exc:  # noqa: BLE001 — cualquier fallo = denegar
+        logger.error("rate_limit_cache_indisponible")
+        raise TooManyRequests(
+            "El servicio de autenticación no está disponible temporalmente. "
+            "Inténtalo más tarde."
+        ) from exc
+
+
 def _sumar(clave: str, ttl: int) -> int:
     """Incrementa un contador con ventana deslizante simple."""
     # No se usa `cache.incr`: si la clave no existe algunos backends fallan.
@@ -154,7 +182,9 @@ def verificar_login(credencial: str, ip: str | None = None) -> None:
 
     Raises:
         AccountLocked: Hay un bloqueo temporal vigente por intentos fallidos.
+        TooManyRequests: La cache de limites no responde (fail-closed).
     """
+    _asegurar_cache_auth()
     minutos = _minutos_restantes(_clave_bloqueo(credencial))
     if minutos is not None:
         logger.info("login_bloqueado", extra={"motivo": "credencial"})
@@ -174,7 +204,9 @@ def registrar_fallo_login(credencial: str, ip: str | None = None) -> None:
     contadores de la cache. El contador de fallos se conserva tras un bloqueo
     corto para poder escalar la duracion (5 min → 10 min → 24 h).
     """
-    IntentoLogin.objects.create(clave=credencial, ip=ip or None, exitoso=False)
+    _asegurar_cache_auth()
+    ip_almacenada = _hash_ip(ip) if ip else None
+    IntentoLogin.objects.create(clave=credencial, ip=ip_almacenada, exitoso=False)
 
     fallos = _sumar(_clave_fallos(credencial), _ventana_segundos())
     if _debe_bloquear(fallos) and not cache.get(_clave_bloqueo(credencial)):
@@ -189,7 +221,9 @@ def registrar_fallo_login(credencial: str, ip: str | None = None) -> None:
 
 def registrar_exito_login(credencial: str, ip: str | None = None) -> None:
     """Anota un login correcto y limpia los contadores de esa credencial."""
-    IntentoLogin.objects.create(clave=credencial, ip=ip or None, exitoso=True)
+    _asegurar_cache_auth()
+    ip_almacenada = _hash_ip(ip) if ip else None
+    IntentoLogin.objects.create(clave=credencial, ip=ip_almacenada, exitoso=True)
     cache.delete_many([_clave_fallos(credencial), _clave_bloqueo(credencial)])
     if ip:
         cache.delete(_clave_fallos_ip(_hash_ip(ip)))
@@ -214,6 +248,7 @@ def verificar_transferencias(apoderado_id: int) -> None:
     Raises:
         TooManyRequests: Se supero `TRANSFER_MAX_PER_HOUR`.
     """
+    _asegurar_cache_auth()
     usadas = int(cache.get(_clave_transferencias(apoderado_id)) or 0)
     if usadas >= max(1, int(settings.TRANSFER_MAX_PER_HOUR)):
         logger.info("transferencia_limite", extra={"apoderado_id": apoderado_id})

@@ -240,10 +240,17 @@ paths:
     get:
       tags: [auth]
       summary: Consultar el estado de la solicitud
-      description: El dispositivo solicitante consulta si ya fue aprobada.
+      description: |
+        El dispositivo solicitante consulta si ya fue aprobada. Requiere el
+        `token_consulta` recibido al crear la solicitud (query `token`).
       security: []
       parameters:
         - $ref: "#/components/parameters/IdTransferencia"
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+          description: token_consulta emitido en POST /auth/session-transfer/request
       responses:
         "200":
           description: Estado actual
@@ -843,6 +850,11 @@ components:
           type: string
           enum: [pending, approved, rejected, expired]
         expira_en: { type: string, format: date-time }
+        token_consulta:
+          type: string
+          description: |
+            Secreto de un solo uso emitido al crear la solicitud. Obligatorio
+            como query `token` en GET /auth/session-transfer/{id}.
 
     TipoMensaje:
       type: string
@@ -987,7 +999,7 @@ components:
           example: jean_piaget
         tipo:
           type: string
-          enum: [entrada, salida, incidencia]
+          enum: [entrada, salida, incidencia, aviso]
         id_estudiante: { type: integer }
         id_registro:
           type: integer

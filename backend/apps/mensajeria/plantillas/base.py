@@ -208,6 +208,8 @@ class ContextoEvento:
             "id_usuario_registro",
             "nombre_usuario_registro",
             "fecha_hora_registro",
+            "texto_libre",
+            "nota",
         }
 
         id_estudiante = datos.get("id_estudiante")
@@ -231,6 +233,9 @@ class ContextoEvento:
             nivel_reincidencia=datos.get("nivel_reincidencia"),
             observaciones=datos.get("observaciones"),
             reportado_por=datos.get("nombre_usuario_registro"),
+            texto_libre=(
+                str(datos.get("texto_libre") or datos.get("nota") or "").strip() or None
+            ),
             id_registro=id_registro,
             extra={clave: valor for clave, valor in datos.items() if clave not in conocidos},
         )

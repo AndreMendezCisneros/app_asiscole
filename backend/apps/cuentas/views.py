@@ -33,12 +33,15 @@ from apps.cuentas.serializers import (
 def _ip_de(request: Request) -> str | None:
     """Devuelve la IP de origen, respetando el proxy inverso.
 
-    La IP es un dato personal: se usa para contar intentos y se guarda hasheada
-    en las claves de la cache; nunca se escribe en un log.
+    Con un solo proxy de confianza (Caddy), el hop añadido es el último de
+    `X-Forwarded-For`. Tomar el primero permitiría spoofing del cliente.
+    La IP es un dato personal: se hashea antes de cache/BD; nunca en logs.
     """
     reenviada = request.headers.get("X-Forwarded-For", "")
     if reenviada:
-        return reenviada.split(",")[0].strip()
+        partes = [p.strip() for p in reenviada.split(",") if p.strip()]
+        if partes:
+            return partes[-1]
     return request.META.get("REMOTE_ADDR")
 
 
@@ -201,5 +204,6 @@ class ConsultarTransferenciaView(APIView):
 
     def get(self, request: Request, id: int) -> Response:
         """Devuelve el estado para que el dispositivo nuevo sepa si ya puede entrar."""
-        transferencia = services.consultar_transferencia(id)
+        token = (request.query_params.get("token") or "").strip()
+        transferencia = services.consultar_transferencia(id, token_consulta=token)
         return Response(SolicitudTransferenciaRespuestaSerializer(transferencia).data)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+
 from django.conf import settings
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.request import Request
@@ -20,7 +22,7 @@ class IngestApiKeyAuthentication(BaseAuthentication):
             raise Unauthenticated("La ingesta por API no está configurada.")
 
         recibido = (request.META.get(CABECERA_INGEST) or "").strip()
-        if not recibido or recibido != esperado:
+        if not recibido or not hmac.compare_digest(recibido, esperado):
             raise Unauthenticated("Clave de ingesta inválida.")
 
         # DRF espera (user, auth). No hay usuario Django; marcamos el request.

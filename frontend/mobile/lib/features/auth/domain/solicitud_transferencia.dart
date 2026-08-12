@@ -23,11 +23,13 @@ class SolicitudTransferencia extends Equatable {
     required this.id,
     required this.estado,
     this.expiraEn,
+    this.tokenConsulta,
   });
 
   final String id;
   final EstadoTransferencia estado;
   final DateTime? expiraEn;
+  final String? tokenConsulta;
 
   bool get estaPendiente => estado == EstadoTransferencia.pendiente;
 
@@ -46,8 +48,9 @@ class SolicitudTransferencia extends Equatable {
         expiraEn: json['expira_en'] is String
             ? DateTime.tryParse(json['expira_en'] as String)?.toUtc()
             : null,
+        tokenConsulta: json['token_consulta'] as String?,
       );
 
   @override
-  List<Object?> get props => [id, estado, expiraEn];
+  List<Object?> get props => [id, estado, expiraEn, tokenConsulta];
 }

@@ -205,6 +205,8 @@ class TransferenciaSesion(models.Model):
     )
     from_device_id = models.TextField(null=True, blank=True)
     to_device_id = models.TextField()
+    # Secreto de un solo uso para consultar el estado sin autenticación (anti-IDOR).
+    token_consulta = models.CharField(max_length=64, unique=True, null=True, blank=True)
     estado = models.TextField(default=TRANSFERENCIA_PENDIENTE, choices=ESTADOS_TRANSFERENCIA)
     creada_en = models.DateTimeField(default=timezone.now)
     expira_en = models.DateTimeField()

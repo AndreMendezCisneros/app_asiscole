@@ -16,11 +16,13 @@ class MensajesRepository {
   final LocalDb _local;
   final NetworkInfo _red;
 
+  static const int _maxPaginasSync = 5;
+
   Future<List<Mensaje>> sincronizar() async {
-    final online = await _red.hayConexion;
-    if (!online) {
-      return _desdeCache();
-    }
+    // No cortar por connectivity_plus: en MIUI a veces marca “sin red” con
+    // datos activos. Si la API falla, el cubit cae a caché.
+    await _flushLeidosPendientes();
+
     // `since` con margen de 6 h: evita perder mensajes por desfase TZ de la BD
     // central, y reduce el payload cuando ya hay caché local.
     String? since;
@@ -34,10 +36,18 @@ class MensajesRepository {
             .toIso8601String();
       }
     }
-    final pagina = await _api.listar(since: since);
-    await _local.guardarMensajes(
-      pagina.items.map((m) => m.toLocalRow()).toList(),
-    );
+
+    String? cursor;
+    for (var i = 0; i < _maxPaginasSync; i++) {
+      final pagina = await _api.listar(since: since, cursor: cursor);
+      await _local.guardarMensajes(
+        pagina.items.map((m) => m.toLocalRow()).toList(),
+      );
+      cursor = pagina.nextCursor;
+      if (cursor == null || cursor.isEmpty || pagina.items.isEmpty) break;
+      // Tras la primera página, paginar solo con cursor (sin since).
+      since = null;
+    }
     return _desdeCache();
   }
 
@@ -52,7 +62,25 @@ class MensajesRepository {
   Future<void> marcarLeidos(List<String> ids) async {
     await _local.marcarLeidos(ids);
     if (await _red.hayConexion) {
-      await _api.marcarLeidos(ids);
+      try {
+        await _api.marcarLeidos(ids);
+        return;
+      } on Object {
+        await _local.encolarLeidosPendientes(ids);
+        return;
+      }
+    }
+    await _local.encolarLeidosPendientes(ids);
+  }
+
+  Future<void> _flushLeidosPendientes() async {
+    final pendientes = await _local.leidosPendientes();
+    if (pendientes.isEmpty) return;
+    try {
+      await _api.marcarLeidos(pendientes);
+      await _local.quitarLeidosPendientes(pendientes);
+    } on Object {
+      // Se reintentará en el próximo sync.
     }
   }
 }

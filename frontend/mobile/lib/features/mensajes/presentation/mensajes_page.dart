@@ -180,7 +180,11 @@ class _VistaState extends State<_Vista>
                   );
                 }
                 if (state is MensajesError) {
-                  return EmptyStateAsiscole(mensaje: state.mensaje);
+                  return EmptyStateAsiscole(
+                    mensaje: state.mensaje,
+                    onReintentar: () =>
+                        context.read<MensajesCubit>().cargar(),
+                  );
                 }
                 final listos = state as MensajesListos;
                 final noLeidos = listos.items.where((m) => !m.leido).length;
@@ -209,6 +213,26 @@ class _VistaState extends State<_Vista>
                           nombre: activo.nombre,
                           detalle: '${activo.grado} ${activo.seccion}'.trim(),
                           onCambiar: () => context.go(Rutas.perfil),
+                        ),
+                      ),
+                    if (listos.offline)
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.wifi_off, size: 16, color: Color(0xFF856404)),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Mostrando mensajes guardados (sin conexión)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF856404),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     Padding(

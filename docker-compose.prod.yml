@@ -1,19 +1,36 @@
-# Producción en VPS — BD central = Supabase (no Postgres local).
-# Puerto solo en localhost; Caddy hace TLS en jeanpiaget.asiscole.com/canal-api
+# Producción — VPS dedicado del canal (perfil Hetzner Opción B: ~8 CPU / 32 GB).
+# BD central = Supabase (no Postgres local).
+# Puerto solo en localhost; Caddy hace TLS (ej. jeanpiaget.asiscole.com/canal-api).
+#
+# Requiere en `.env` (ver `.env.production.example`):
+#   DJANGO_DEBUG=False, DJANGO_SECRET_KEY fuerte, REDIS_PASSWORD, REDIS_URL
+#   con auth, p. ej. redis://:PASSWORD@redis:6379/0
+#
+# Capacidad por defecto (Opción B):
+#   Gunicorn 8 workers × 4 threads ≈ 32 requests HTTP en paralelo
+#   Celery concurrency 6 (push / outbox / purga)
+# Ajustar con GUNICORN_WORKERS / GUNICORN_THREADS / CELERY_CONCURRENCY.
 
 services:
   redis:
     image: redis:7-alpine
     container_name: asiscole_canal_redis
-    command: redis-server --appendonly yes
+    command: >
+      redis-server --appendonly yes
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD requerida}
+      --maxmemory ${REDIS_MAXMEMORY:-2gb}
+      --maxmemory-policy allkeys-lru
+      --tcp-backlog 511
     volumes:
       - canal_redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    # En caja de 32 GB: Redis no debe comerse la RAM de Gunicorn/Celery.
+    mem_limit: ${REDIS_MEM_LIMIT:-2560m}
 
   backend:
     build: ./backend
@@ -21,14 +38,17 @@ services:
     command: >
       gunicorn config.wsgi:application
       --bind 0.0.0.0:8000
-      --workers 2
-      --threads 2
-      --timeout 90
+      --workers ${GUNICORN_WORKERS:-8}
+      --threads ${GUNICORN_THREADS:-4}
+      --timeout ${GUNICORN_TIMEOUT:-90}
+      --keep-alive 5
+      --max-requests ${GUNICORN_MAX_REQUESTS:-1200}
+      --max-requests-jitter 120
+      --worker-tmp-dir /dev/shm
       --access-logfile -
       --error-logfile -
     env_file: .env
     environment:
-      REDIS_URL: redis://redis:6379/0
       USE_LOCMEM_CACHE: "False"
       POLL_OUTBOX_INLINE: "False"
     ports:
@@ -39,20 +59,33 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # Holgura para 8×4 workers + conexiones a Supabase.
+    mem_limit: ${BACKEND_MEM_LIMIT:-12g}
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
 
   worker:
     build: ./backend
     container_name: asiscole_canal_worker
-    command: celery -A config worker -l info
+    command: >
+      celery -A config worker -l info
+      --concurrency ${CELERY_CONCURRENCY:-6}
+      --max-tasks-per-child ${CELERY_MAX_TASKS_PER_CHILD:-200}
+      --prefetch-multiplier 1
     env_file: .env
     environment:
-      REDIS_URL: redis://redis:6379/0
       USE_LOCMEM_CACHE: "False"
     volumes:
       - ./secrets:/secrets:ro
     depends_on:
-      - backend
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
     restart: unless-stopped
+    mem_limit: ${WORKER_MEM_LIMIT:-6g}
 
   beat:
     build: ./backend
@@ -60,13 +93,13 @@ services:
     command: celery -A config beat -l info
     env_file: .env
     environment:
-      REDIS_URL: redis://redis:6379/0
       USE_LOCMEM_CACHE: "False"
     volumes:
       - ./secrets:/secrets:ro
     depends_on:
       - backend
     restart: unless-stopped
+    mem_limit: ${BEAT_MEM_LIMIT:-512m}
 
 volumes:
   canal_redis_data:

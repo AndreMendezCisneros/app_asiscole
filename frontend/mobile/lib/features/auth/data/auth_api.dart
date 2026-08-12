@@ -80,10 +80,14 @@ class AuthApi {
     return SolicitudTransferencia.fromJson(respuesta.data ?? const {});
   }
 
-  Future<SolicitudTransferencia> consultarTransferencia(String id) async {
+  Future<SolicitudTransferencia> consultarTransferencia(
+    String id, {
+    required String tokenConsulta,
+  }) async {
     final respuesta = await _dio.get<Map<String, dynamic>>(
       '/auth/session-transfer/$id',
       options: OpcionesAuth.con(EsquemaAuth.ninguno),
+      queryParameters: {'token': tokenConsulta},
     );
     return SolicitudTransferencia.fromJson(respuesta.data ?? const {});
   }

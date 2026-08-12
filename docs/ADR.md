@@ -137,3 +137,32 @@ infiere nada localmente.
 
 **Consecuencia.** Falta definir con el colegio el calendario lectivo para distinguir un día
 sin clases de una falta real. Mientras tanto se marca `sin_registro`.
+
+---
+
+## ADR-10 — Sin `SECURE_SSL_REDIRECT` detrás de Caddy/Cloudflare
+
+**Contexto.** Con `DEBUG=False`, Django activaba `SECURE_SSL_REDIRECT` por defecto.
+Caddy termina TLS y habla HTTP con Gunicorn en `127.0.0.1:8000`. Si falta
+`X-Forwarded-Proto` (o el redirect se arma con el path ya strippeado), Django
+responde 301 a `https://host/v0.1/...` **sin** `/canal-api`. El cliente sigue el
+redirect y recibe el HTML del SIE.
+
+**Decisión.** En producción detrás de proxy: `DJANGO_SECURE_SSL_REDIRECT=False`.
+Caddy/Cloudflare ya fuerzan HTTPS. El default en código es `False`.
+
+**Consecuencia.** No depender del redirect de Django para TLS. Documentado en
+[`estado-produccion.md`](estado-produccion.md) (incidente 2026-07-30).
+
+---
+
+## ADR-11 — App: VPS por defecto también en debug
+
+**Contexto.** El default `http://10.0.2.2:8000` solo sirve al emulador Android.
+Las pruebas reales son en celular físico contra el VPS.
+
+**Decisión.** `Env.baseUrl` apunta a producción salvo
+`--dart-define=ASISCOLE_ENV=dev` o `API_BASE_URL=...`.
+
+**Consecuencia.** Un `flutter run` en dispositivo habla al canal real; el
+desarrollo local exige `-Local` / define explícito.

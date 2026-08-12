@@ -32,6 +32,10 @@ class AuthCubit extends Cubit<AuthState> {
   StreamSubscription<ApiError>? _suscripcionEventos;
   StreamSubscription<bool>? _suscripcionRed;
   Timer? _sondeoTransferencia;
+  Timer? _debounceOffline;
+
+  /// Evita que un login lento/fallido pise el resultado de uno más reciente.
+  int _generacionLogin = 0;
 
   /// Restaura la sesión guardada al abrir la app.
   Future<void> iniciar() async {
@@ -49,24 +53,26 @@ class AuthCubit extends Cubit<AuthState> {
       return;
     }
 
-    final hayRed = await (_red?.hayConexion ?? Future.value(true));
-    if (!hayRed) {
-      emit(OfflineMessagesOnly(perfil));
-      return;
-    }
-
     try {
       await _repositorio.refrescarDatosAlArranque();
     } on ApiError catch (e) {
       if (e.codigo == CodigosError.sesionExpirada ||
           e.codigo == CodigosError.noAutenticado) {
+        await _repositorio.limpiarSesionLocal();
         emit(Unauthenticated(codigoError: e.codigo, mensaje: e.mensaje));
         return;
       }
-      // Fallo de red u otro: si hay perfil cacheado, seguimos; si no, intentamos
-      // recuperar perfil más abajo.
+      // Fallo de red u otro: si hay perfil cacheado, seguimos en modo offline
+      // real (API falló), no por el sensor de conectividad del teléfono.
+      if (perfil != null) {
+        emit(OfflineMessagesOnly(perfil));
+        return;
+      }
     } catch (_) {
-      // Misma política: no borrar sesión solo por un fallo puntual.
+      if (perfil != null) {
+        emit(OfflineMessagesOnly(perfil));
+        return;
+      }
     }
 
     if (perfil == null) {
@@ -102,6 +108,8 @@ class AuthCubit extends Cubit<AuthState> {
       telefono: telefono,
       documentoEstudiante: documentoEstudiante,
     );
+    final generacion = ++_generacionLogin;
+    _debounceOffline?.cancel();
     emit(const Authenticating());
 
     try {
@@ -109,9 +117,23 @@ class AuthCubit extends Cubit<AuthState> {
         telefono: credenciales.telefono,
         documentoEstudiante: credenciales.documentoEstudiante,
       );
+      // Un login OK siempre gana: aunque haya otro intento en vuelo.
+      _generacionLogin = generacion;
+      _debounceOffline?.cancel();
       emit(OnlineSync(sesion.perfil));
     } on ApiError catch (e) {
+      if (generacion != _generacionLogin) return;
+      // No pisar una sesión ya abierta por un fallo concurrente.
+      if (state is OnlineSync || state is OfflineMessagesOnly) return;
       emit(_estadoParaFalloDeLogin(e, credenciales));
+    } catch (_) {
+      if (generacion != _generacionLogin) return;
+      if (state is OnlineSync || state is OfflineMessagesOnly) return;
+      emit(
+        const Unauthenticated(
+          mensaje: 'No se pudo iniciar sesión. Inténtalo de nuevo.',
+        ),
+      );
     }
   }
 
@@ -171,8 +193,20 @@ class AuthCubit extends Cubit<AuthState> {
     }
 
     try {
-      final solicitud =
-          await _repositorio.consultarTransferencia(actual.solicitud.id);
+      final token = actual.solicitud.tokenConsulta ?? '';
+      if (token.isEmpty) {
+        detenerSondeoTransferencia();
+        emit(
+          const Unauthenticated(
+            mensaje: 'La solicitud de traspaso no es válida. Inténtalo de nuevo.',
+          ),
+        );
+        return;
+      }
+      final solicitud = await _repositorio.consultarTransferencia(
+        actual.solicitud.id,
+        tokenConsulta: token,
+      );
       await transferenciaResuelta(solicitud);
     } on ApiError catch (e) {
       if (e.codigo == CodigosError.transferenciaExpirada) {
@@ -268,13 +302,19 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   void cambioDeConexion(bool hayRed) {
-    final actual = state;
-    if (hayRed && actual is OfflineMessagesOnly && actual.perfil != null) {
-      emit(OnlineSync(actual.perfil!));
+    // Solo recuperamos a online si el sensor vuelve. No bajamos a offline por
+    // connectivity_plus: en MIUI marca “sin red” con datos activos y el login
+    // al VPS ya demostró que hay internet. El offline real lo marcan los
+    // fallos de API en cada feature.
+    if (!hayRed) {
+      _debounceOffline?.cancel();
       return;
     }
-    if (!hayRed && actual is OnlineSync) {
-      emit(OfflineMessagesOnly(actual.perfil));
+    _debounceOffline?.cancel();
+    _debounceOffline = null;
+    final actual = state;
+    if (actual is OfflineMessagesOnly && actual.perfil != null) {
+      emit(OnlineSync(actual.perfil!));
     }
   }
 
@@ -291,6 +331,7 @@ class AuthCubit extends Cubit<AuthState> {
   @override
   Future<void> close() async {
     detenerSondeoTransferencia();
+    _debounceOffline?.cancel();
     await _suscripcionEventos?.cancel();
     await _suscripcionRed?.cancel();
     return super.close();

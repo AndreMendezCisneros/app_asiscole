@@ -7,6 +7,8 @@ esta matriculado solo porque la BD de su colegio tardo dos segundos de mas.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from django.db import OperationalError
 from django.utils import timezone
@@ -265,7 +267,8 @@ def test_la_reconciliacion_da_de_baja_lo_que_ya_no_existe(colegios, monkeypatch,
         codigo_barras="viejo",
         nombre_estudiante="Ya No Esta",
         estado_vinculo="activo",
-        sincronizado_en=timezone.now(),
+        # Anterior al `inicio` de la reconciliación (evita empate de timestamps).
+        sincronizado_en=timezone.now() - timedelta(hours=1),
     )
     cache_directorio.escribir_cache("+51900000001", [crear_vinculo(telefono="+51900000001")])
 

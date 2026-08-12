@@ -1,0 +1,5 @@
+# Copiar a android/key.properties (gitignored) y apuntar al keystore de release.
+storePassword=REEMPLAZAR
+keyPassword=REEMPLAZAR
+keyAlias=asiscole
+storeFile=../keystore/asiscole-release.jks

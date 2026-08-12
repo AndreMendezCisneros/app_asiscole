@@ -74,29 +74,49 @@ flutter run
 
 ## Documentación
 
-- [docs/openapi.yaml](docs/openapi.yaml) — contrato de API `/v0.1/`. Es contract-first:
-  ningún cliente consume un endpoint que no esté antes aquí.
-- [frontend/mobile/README.md](frontend/mobile/README.md) — app Flutter (UI de marca,
-  arranque, build del APK **Asiscole Messenger**).
-- [db/legacy/bootstrap_colegio.sql](db/legacy/bootstrap_colegio.sql) — esquema del colegio.
-- [db/migrations](db/migrations) — SQL del canal, aditivo.
+- [docs/estado-produccion.md](docs/estado-produccion.md) — **qué está en prod ahora**
+  (VPS, migraciones, APK, incidente SSL).
+- [docs/deploy-vps.md](docs/deploy-vps.md) — cutover / VPS nuevo.
+- [docs/openapi.yaml](docs/openapi.yaml) — contrato de API `/v0.1/` (contract-first).
+- [frontend/mobile/README.md](frontend/mobile/README.md) — app Flutter y APK.
+- [docs/ADR.md](docs/ADR.md) — decisiones de arquitectura.
+- [db/migrations](db/migrations) — SQL aditivo del canal (`asis_*`).
 
 ## Producción (VPS Jean Piaget)
+
+**Estado operativo actual (cutover, APK, incidentes):**  
+[`docs/estado-produccion.md`](docs/estado-produccion.md).
 
 El backend del canal corre en el mismo VPS que SIE JP, detrás de Caddy:
 
 | Recurso | URL |
 | --- | --- |
 | Health | https://jeanpiaget.asiscole.com/canal-api/health |
-| API / Swagger | https://jeanpiaget.asiscole.com/canal-api/v0.1/docs/ |
+| API | https://jeanpiaget.asiscole.com/canal-api/v0.1/… |
 | Ingesta (SIE → canal) | `POST …/canal-api/v0.1/ingesta/eventos` |
 
-Compose de producción: `docker-compose.prod.yml` (Redis + gunicorn + Celery).  
-La app Flutter en **release** usa `https://jeanpiaget.asiscole.com/canal-api/v0.1`
-(ver `frontend/mobile/lib/core/config/env.dart`).
+Swagger (`/v0.1/docs/`) solo con `DJANGO_DEBUG=True` (no en producción).
 
-Despliegue / otro VPS: ver [docs/deploy-vps.md](docs/deploy-vps.md).  
-Push FCM en el VPS: ver [docs/diagnostico-push.md](docs/diagnostico-push.md) y
+Compose: `docker-compose.prod.yml`. Defaults del archivo asumen **Opción B**
+(~8 CPU / 32 GB); el host actual es más pequeño y va **downscaleado** (ver
+estado-produccion). Variables: [`.env.production.example`](.env.production.example).
+
+**Obligatorio detrás de Caddy:** `DJANGO_SECURE_SSL_REDIRECT=False` (si es `True`,
+la app recibe HTML del SIE y muestra “sin conexión”).
+
+La app Flutter (debug y release) usa por defecto
+`https://jeanpiaget.asiscole.com/canal-api/v0.1`
+(`frontend/mobile/lib/core/config/env.dart`).
+
+APK de distribución:
+
+```powershell
+.\scripts\ops_local_release.ps1
+# → frontend/mobile/build/app/outputs/flutter-apk/Asiscole_Messenger.apk
+```
+
+Despliegue: [docs/deploy-vps.md](docs/deploy-vps.md).  
+Push FCM: [docs/diagnostico-push.md](docs/diagnostico-push.md) y
 `scripts/deploy_push_fcm_vps.sh`. Health debe reportar `"fcm_disponible": true`.
 
 Flujo:

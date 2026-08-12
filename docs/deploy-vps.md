@@ -16,13 +16,46 @@ Canal Django (VPS) + Redis + Celery worker/beat
 Caddy/nginx (TLS) → 127.0.0.1:8000  bajo  /canal-api
 ```
 
+**Estado vivo del despliegue JP (qué ya se aplicó, APK, incidentes):**  
+[`estado-produccion.md`](estado-produccion.md).
+
 Referencias relacionadas:
 
 - Compose: [`docker-compose.prod.yml`](../docker-compose.prod.yml)
-- Variables: [`.env.example`](../.env.example)
+- Variables prod: [`.env.production.example`](../.env.production.example) (no usar `.env.example` de dev)
 - SQL colegio / central: [`db/migrations/README.md`](../db/migrations/README.md)
 - Push: [`docs/diagnostico-push.md`](diagnostico-push.md)
 - Script FCM: [`scripts/deploy_push_fcm_vps.sh`](../scripts/deploy_push_fcm_vps.sh)
+- Load smoke: [`scripts/load/k6_canal_100vu.js`](../scripts/load/k6_canal_100vu.js)
+
+---
+
+## 0. Hardware recomendado (Hetzner dedicado — Opción B)
+
+**Hoy (JP):** el canal comparte un Cloud ~4 vCPU / 8 GB con SIE; workers
+bajados a 3×2 / Celery 2. Detalle vivo: [`estado-produccion.md`](estado-produccion.md).
+
+Perfil objetivo para **miles de apoderados activos** (pico matutino), con BD en
+Supabase (el VPS no hospeda Postgres del canal):
+
+| Recurso | Objetivo |
+| --- | --- |
+| CPU | 8–12 núcleos (AMD reciente / AX o equivalente en [Server Auction](https://www.hetzner.com/sb/)) |
+| RAM | **32 GB** |
+| Disco | ≥ 256 GB NVMe/SSD |
+| Red | 1 Gbit (incluido) |
+| Rol | Solo canal (Caddy + Gunicorn + Celery + Redis). **No** mezclar con SIE. |
+
+Defaults de capacidad en `docker-compose.prod.yml` / `.env.production.example`:
+
+| Parámetro | Valor Opción B | Efecto |
+| --- | --- | --- |
+| `GUNICORN_WORKERS` × `GUNICORN_THREADS` | 8 × 4 | ≈ 32 requests HTTP en paralelo |
+| `CELERY_CONCURRENCY` | 6 | Push / outbox / purga |
+| Redis `maxmemory` | 2 GB (LRU) | No come la RAM de la API |
+
+Tras el alta: `docker compose … up -d --build`, migraciones, health, y smoke k6
+en ventana controlada (500 → 1000 VU) midiendo p95 bajo 800 ms.
 
 ---
 
@@ -31,7 +64,7 @@ Referencias relacionadas:
 | Elemento | ¿En el VPS? | ¿En Git? | Notas |
 | --- | --- | --- | --- |
 | Código `backend/` + compose | Sí | Sí | `git pull` o tar de deploy |
-| `.env` de producción | Sí | **No** | Partir de `.env.example` |
+| `.env` de producción | Sí | **No** | Partir de `.env.production.example` |
 | `secrets/fcm-adminsdk.json` | Sí | **No** | Firebase **Admin**, no el de la app |
 | `google-services.json` / `firebase_options.dart` | No (solo app) | Stub / privado | Claves de **cliente** |
 | BD central Supabase | Externa | No | Proyecto propio del canal |
@@ -54,39 +87,39 @@ Ruta típica hoy: `/opt/asiscole-canal` (Jean Piaget).
 - [ ] Health actual responde: `curl -sS https://DOMINIO/canal-api/health`
 - [ ] Sabes si hay migraciones Django nuevas en el PR/commit.
 
-### 2.2 Procedimiento
+### 2.2 Procedimiento (cutover)
 
 ```bash
 cd /opt/asiscole-canal
+git pull origin master   # o desplegar tar con el código nuevo
 
-# Opción A — si el repo está clonado en el VPS
-git pull origin master
+# .env alineado a .env.production.example:
+#   DJANGO_DEBUG=False, DJANGO_SECRET_KEY ≥32 chars,
+#   DJANGO_SECURE_SSL_REDIRECT=False   ← OBLIGATORIO detrás de Caddy
+#   REDIS_PASSWORD + REDIS_URL=redis://:PASSWORD@redis:6379/0
+#   En host ~8 GB: bajar GUNICORN_WORKERS/THREADS y CELERY_CONCURRENCY
+#   (ver estado-produccion.md; no dejar 8×4 en máquina pequeña)
 
-# Opción B — si despliegas con tar desde tu PC
-# (en el PC) tar del backend → scp → en el VPS:
-# tar -xf backend-deploy.tar -C backend.new && mv backend.new backend
-
-# Credenciales FCM (no omitir)
 test -f secrets/fcm-adminsdk.json
-grep -q '^FCM_CREDENTIALS_PATH=/secrets/fcm-adminsdk.json$' .env
+bash scripts/ops_prod_cutover.sh
+```
 
-# Rebuild + reinicio (Redis puede quedarse corriendo)
-docker compose -f docker-compose.prod.yml build backend worker beat
-docker compose -f docker-compose.prod.yml up -d backend worker beat
+El script valida `.env`, hace `build`/`up` (Redis auth), `migrate` (p. ej.
+`0005_transferencia_token_consulta` + índice directorio) y aplica
+`db/migrations/007_central_rls_lockdown.sql` en la BD central.
 
-# Migraciones BD central (Django es dueño del esquema)
-docker compose -f docker-compose.prod.yml exec backend \
-  python manage.py migrate --noinput
+**Rotar `DJANGO_SECRET_KEY` invalida todas las sesiones:** los apoderados deben
+volver a iniciar sesión (borrar datos de la app si el APK viejo queda pegado).
 
-# Verificación
-sleep 3
+Verificación manual:
+
+```bash
 curl -sS http://127.0.0.1:8000/health
-# Esperado: {"status":"ok","servicio":"asiscole-backend","fcm_disponible":true}
-
 docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs --tail=50 worker
-# No debe aparecer push_simulado en régimen normal
 ```
+
+APK en tu PC: `.\scripts\ops_local_release.ps1` (genera `Asiscole_Messenger.apk`).
 
 ### 2.3 Qué NO tocar en un update
 
@@ -132,7 +165,7 @@ git clone https://github.com/AndreMendezCisneros/app_asiscole.git .
 #### B. `.env`
 
 ```bash
-cp .env.example .env
+cp .env.production.example .env
 chmod 600 .env
 nano .env   # completar (ver sección 4)
 ```
@@ -141,17 +174,25 @@ Mínimo obligatorio en producción:
 
 | Variable | Valor orientativo |
 | --- | --- |
-| `DJANGO_SECRET_KEY` | Aleatorio largo (nuevo en cada VPS) |
-| `DJANGO_DEBUG` | `False` |
+| `DJANGO_SECRET_KEY` | Aleatorio ≥32 chars (el arranque aborta si es el default) |
+| `DJANGO_DEBUG` | `False` (plantilla: `.env.production.example`) |
+| `DJANGO_SECURE_SSL_REDIRECT` | **`False`** detrás de Caddy/Cloudflare (ADR-10) |
 | `DJANGO_ALLOWED_HOSTS` | `tu.dominio.com,127.0.0.1` |
-| `CENTRAL_DB_*` | Proyecto Supabase **del canal** |
+| `CENTRAL_DB_*` | Proyecto Supabase **del canal** (pooler IPv4) |
 | `CENTRAL_DB_SSLMODE` | `require` |
 | `SCHOOL_DATABASES` | JSON del/los colegios (pooler) |
-| `REDIS_URL` | `redis://redis:6379/0` (Compose lo sobrescribe/ok) |
+| `REDIS_PASSWORD` | Obligatoria (Compose la pasa a `redis-server --requirepass`) |
+| `REDIS_URL` | `redis://:PASSWORD@redis:6379/0` (desde `.env`, no se sobrescribe) |
+| `GUNICORN_WORKERS` / `THREADS` | `8` / `4` (Opción B; ver sección 0) |
+| `CELERY_CONCURRENCY` | `6` |
 | `USE_LOCMEM_CACHE` | `False` |
 | `POLL_OUTBOX_INLINE` | `False` |
 | `FCM_CREDENTIALS_PATH` | `/secrets/fcm-adminsdk.json` |
 | `INGEST_API_KEY` | Clave fuerte (SIE → canal) |
+
+Tras crear la BD central en Supabase: aplicar
+`db/migrations/007_central_rls_lockdown.sql` **o** desactivar la Data API del
+proyecto (PostgREST). Django usa rol de servicio / BYPASSRLS.
 
 #### C. Secrets FCM
 
@@ -290,8 +331,11 @@ docker compose -f docker-compose.prod.yml logs --tail=100 worker beat
 | “No conectamos con el colegio” | Host IPv6 / password / JSON `SCHOOL_DATABASES` | Pooler + validar JSON |
 | 404 en confirmar incidencia | Backend sin deploy de la feature | Pull + migrate + rebuild |
 | Login 500 | Migraciones central pendientes | `manage.py migrate` |
+| “Sin conexión” / login 200 con ~5 KB y sin bandeja | `SECURE_SSL_REDIRECT=True` → HTML del SIE | `.env`: `DJANGO_SECURE_SSL_REDIRECT=False` + recreate backend (ADR-10) |
+| APK viejo deja de entrar tras cutover | Secret JWT rotado | Borrar datos app + login de nuevo |
 | Ingesta 401 | `INGEST_API_KEY` distinta en SIE y canal | Alinear claves |
 | Solo backend, sin avisos nuevos | Worker/beat caídos | `up -d worker beat` |
+| OOM / latencia en VPS 8 GB | Workers Opción B (8×4) en host chico | Bajar a 3×2 / Celery 2 (estado-produccion) |
 
 ---
 

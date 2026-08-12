@@ -11,9 +11,12 @@ script va en una de ellas; ejecutarlos en la que no toca no funciona.
 | `004_mensaje_unico_por_apoderado.sql` | **BD central** (si ya aplicaste un `002` antiguo) | Corrige el índice único de mensajes |
 | `005_central_gaps.sql` | **BD central** (si ya aplicaste un `002` antiguo) | Añade estudiante activo y cursor de ingesta |
 | `006_confirmacion_incidencia.sql` | **BD central** (si ya aplicaste un `002` antiguo) | Confirmación de incidencias + flag `citacion` |
+| `007_central_rls_lockdown.sql` | **BD central** | Activa RLS en tablas `asis_*` (servicio Django bypass; sin grants a anon) |
 
 `db/legacy/bootstrap_colegio.sql` es solo referencia estructural del esquema del
 colegio: no se ejecuta y no se edita.
+
+Estado aplicado en JP: ver [`docs/estado-produccion.md`](../../docs/estado-produccion.md).
 
 ## Orden de ejecución
 
@@ -64,6 +67,13 @@ Un usuario Tutor, tres estudiantes con teléfonos peruanos escritos en tres form
 distintos (para probar la normalización a E.164), dos faltas de catálogo, registros
 de llegada, una salida y una incidencia activa. Nombres, códigos y teléfonos son
 ficticios.
+
+### `007_central_rls_lockdown.sql` — BD central
+
+Endurece el proyecto Supabase del canal: RLS en tablas `asis_*` para que roles
+expuestos (`anon` / `authenticated`) no lean datos del canal. Django usa rol de
+servicio (bypass RLS). Se aplica en cutover (`ops_prod_cutover.sh`). No modifica
+tablas del colegio ni objetos `sie_*`.
 
 ## Cómo aplicarlos con psql
 

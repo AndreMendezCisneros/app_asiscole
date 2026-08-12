@@ -64,8 +64,13 @@ class AuthRepository {
     });
   }
 
-  Future<SolicitudTransferencia> consultarTransferencia(String id) =>
-      _traducir(() => _api.consultarTransferencia(id));
+  Future<SolicitudTransferencia> consultarTransferencia(
+    String id, {
+    required String tokenConsulta,
+  }) =>
+      _traducir(
+        () => _api.consultarTransferencia(id, tokenConsulta: tokenConsulta),
+      );
 
   /// Aprobar cierra la sesión de este dispositivo, así que se limpian los
   /// tokens locales sin esperar a que el backend nos eche.

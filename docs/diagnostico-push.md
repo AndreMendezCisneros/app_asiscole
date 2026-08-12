@@ -4,6 +4,8 @@ Cuando un aviso tarda **minutos u horas** en llegar al teléfono, el retraso cas
 nunca está en la app: el canal encola en `asis_outbox` (colegio) → poller →
 mensaje central → Celery/FCM.
 
+Estado del VPS JP (FCM ya activo tras cutover): [`estado-produccion.md`](estado-produccion.md).
+
 ## Cadena esperada (métrica evento→push)
 
 | Paso | Qué mirar | Latencia normal |

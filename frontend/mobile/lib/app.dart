@@ -90,8 +90,17 @@ class _AsiscoleAppState extends State<AsiscoleApp> {
       value: _auth,
       child: BlocListener<AuthCubit, AuthState>(
         listenWhen: (prev, next) =>
-            next is OnlineSync && prev is! OnlineSync,
-        listener: (_, _) => unawaited(_registrarPushToken()),
+            (next is OnlineSync && prev is! OnlineSync) ||
+            (next is OfflineMessagesOnly && prev is! OfflineMessagesOnly),
+        listener: (context, estado) {
+          if (estado is OnlineSync || estado is OfflineMessagesOnly) {
+            // Fuerza entrada al shell aunque el refresh de GoRouter falle.
+            _router.go(Rutas.mensajes);
+          }
+          if (estado is OnlineSync) {
+            unawaited(_registrarPushToken());
+          }
+        },
         child: MaterialApp.router(
           title: 'Asiscole Messenger',
           debugShowCheckedModeBanner: false,

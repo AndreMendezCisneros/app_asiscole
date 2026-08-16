@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nada de esta app sale del dispositivo por respaldo o transferencia: la base
+  local (`asiscole.db`) guarda texto de mensajes y nombres de estudiantes, y el
+  almacén cifrado guarda los tokens de sesión.
+
+  `cloud-backup` ya está desactivado por `android:allowBackup="false"`; se
+  declara igualmente para que la intención quede explícita si algún día se
+  reactiva el respaldo.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

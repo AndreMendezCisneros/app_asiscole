@@ -8,7 +8,7 @@ from celery import shared_task
 from django.utils import timezone
 
 from apps.cuentas.models import Apoderado, PushToken
-from apps.mensajeria.models import Mensaje
+from apps.mensajeria.models import TEXTO_ANONIMIZADO, Mensaje
 from apps.mensajeria.push.base import MensajePush
 from apps.mensajeria.push.facade import ServicioPush
 
@@ -58,6 +58,43 @@ def enviar_push_mensaje(mensaje_id: str) -> bool:
         logger.warning(
             "push_envio_fallido",
             extra={"mensaje_id": mensaje_id, "apoderado_id": mensaje.apoderado_id},
+        )
+        raise
+
+
+@shared_task(
+    name="apps.mensajeria.tasks.enviar_push_seccion",
+    ignore_result=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=5,
+)
+def enviar_push_seccion(
+    apoderado_id: int, message_id: str, tipo: str, destino: str
+) -> bool:
+    """Push genérico hacia una sección (p. ej. Notas), sin fila de bandeja."""
+    try:
+        apoderado = Apoderado.objects.get(pk=apoderado_id)
+    except Apoderado.DoesNotExist:
+        logger.info("push_seccion_apoderado_inexistente", extra={"apoderado_id": apoderado_id})
+        return False
+
+    tokens = list(PushToken.objects.filter(apoderado=apoderado, activo=True))
+    if not tokens:
+        logger.info(
+            "push_seccion_sin_destinos",
+            extra={"apoderado_id": apoderado_id, "tipo": tipo},
+        )
+        return False
+
+    carga = MensajePush(message_id=message_id, tipo=tipo, destino=destino)
+    try:
+        resultado = ServicioPush().enviar(tokens, carga)
+        return resultado.hubo_entrega
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "push_seccion_fallido",
+            extra={"apoderado_id": apoderado_id, "tipo": tipo},
         )
         raise
 
@@ -132,7 +169,7 @@ def encolar_reintento_push_pendientes(apoderado_id: int) -> None:
 def purgar_mensajes_vencidos() -> dict[str, int]:
     """Anonimiza mensajes que superaron MESSAGE_RETENTION_MONTHS (RNF-11)."""
     ahora = timezone.now()
-    qs = Mensaje.objects.filter(retenido_hasta__lte=ahora).exclude(texto="[eliminado]")
-    total = qs.update(texto="[eliminado]", metadata={})
+    qs = Mensaje.objects.filter(retenido_hasta__lte=ahora).exclude(texto=TEXTO_ANONIMIZADO)
+    total = qs.update(texto=TEXTO_ANONIMIZADO, metadata={})
     logger.info("purga_retencion", extra={"anonimizados": total})
     return {"anonimizados": total}

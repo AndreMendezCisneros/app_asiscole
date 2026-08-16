@@ -8,6 +8,11 @@ from apps.administracion import views
 
 urlpatterns = [
     path("feature-flags", views.FeatureFlagsView.as_view(), name="feature-flags"),
+    path(
+        "sistema/version-app",
+        views.VersionAppView.as_view(),
+        name="sistema-version-app",
+    ),
     path("admin/apoderados", views.ApoderadosAdminView.as_view(), name="admin-apoderados"),
     path(
         "admin/apoderados/<int:id>/suspender",

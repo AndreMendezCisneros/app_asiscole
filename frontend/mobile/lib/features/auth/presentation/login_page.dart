@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/env.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formato.dart';
@@ -50,6 +51,18 @@ class _LoginPageState extends State<LoginPage> {
           telefono: TelefonoPeru.aE164(_telefono.text),
           documentoEstudiante: _documento.text.trim(),
         );
+  }
+
+  /// Se copia al portapapeles en lugar de abrir el correo: así funciona sin
+  /// `url_launcher` y también en teléfonos sin app de correo configurada.
+  Future<void> _copiarSoporte() async {
+    await Clipboard.setData(const ClipboardData(text: Env.correoSoporte));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Correo de soporte copiado: ${Env.correoSoporte}'),
+      ),
+    );
   }
 
   InputDecoration _decoCampo({
@@ -145,7 +158,7 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 8),
                           const Text(
                             'Ingresa tus datos para recibir los avisos\n'
-                            'del colegio en Asiscole Messenger',
+                            'del colegio en Asis Messenger',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
@@ -256,9 +269,10 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _documento,
-                            keyboardType: TextInputType.text,
+                            // El documento del estudiante es numérico (DNI o
+                            // código de barras), como en el diálogo de Perfil.
+                            keyboardType: TextInputType.number,
                             textInputAction: TextInputAction.done,
-                            textCapitalization: TextCapitalization.characters,
                             inputFormatters: [
                               LengthLimitingTextInputFormatter(50),
                             ],
@@ -325,11 +339,12 @@ class _LoginPageState extends State<LoginPage> {
                             ],
                           ),
                           const SizedBox(height: 12),
+                          // El botón queda habilitado incluso sin aceptar los
+                          // términos: `_enviar` explica qué falta. Un botón que
+                          // no responde deja al apoderado sin saber qué hacer.
                           _BotonIngresar(
                             cargando: cargando,
-                            onPressed: cargando || !_aceptaTerminos
-                                ? null
-                                : _enviar,
+                            onPressed: cargando ? null : _enviar,
                           ),
                           const SizedBox(height: 24),
                           const PanelAviso(
@@ -340,6 +355,8 @@ class _LoginPageState extends State<LoginPage> {
                                 'Si no coinciden, comunícate con la institución.',
                             icono: Icons.help_outline,
                           ),
+                          const SizedBox(height: 12),
+                          _ContactoSoporte(onCopiar: _copiarSoporte),
                           const SizedBox(height: 18),
                           Text(
                             'Solo recibes avisos: este canal no permite responder '
@@ -380,6 +397,57 @@ class _EtiquetaCampo extends StatelessWidget {
         fontSize: 13,
         fontWeight: FontWeight.w600,
         color: AppTheme.textoSecundario,
+      ),
+    );
+  }
+}
+
+/// Salida para el apoderado cuyos datos no coinciden o que quedó bloqueado.
+class _ContactoSoporte extends StatelessWidget {
+  const _ContactoSoporte({required this.onCopiar});
+
+  final Future<void> Function() onCopiar;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onCopiar,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.support_agent_outlined,
+              size: 18,
+              color: AppTheme.moradoPrincipal,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    const TextSpan(text: '¿No puedes ingresar? Escribe a '),
+                    TextSpan(
+                      text: Env.correoSoporte,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ],
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.moradoPrincipal,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

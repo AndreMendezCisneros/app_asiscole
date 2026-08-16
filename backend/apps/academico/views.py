@@ -1,4 +1,4 @@
-"""Vistas de asistencias e incidencias."""
+"""Vistas de asistencias, incidencias y notas."""
 
 from __future__ import annotations
 
@@ -74,6 +74,23 @@ class IncidenciaDetalleView(APIView):
             services.detalle_incidencia(
                 request.apoderado,
                 incidencia_id=id,
+                estudiante_id=_estudiante_id(request),
+            )
+        )
+
+
+class NotasView(APIView):
+    authentication_classes = [DataTokenAuthentication]
+    permission_classes = [EsApoderadoConDataToken]
+
+    @extend_schema(
+        tags=["notas"],
+        parameters=[OpenApiParameter("estudiante_id", int, required=True)],
+    )
+    def get(self, request: Request) -> Response:
+        return Response(
+            services.listar_notas(
+                request.apoderado,
                 estudiante_id=_estudiante_id(request),
             )
         )

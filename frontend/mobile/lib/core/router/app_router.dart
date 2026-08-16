@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/asistencias/presentation/asistencias_page.dart';
@@ -35,8 +35,9 @@ class Rutas {
   static const String terminos = '/terminos';
 }
 
-GoRouter crearRouter(AuthCubit auth) {
+GoRouter crearRouter(AuthCubit auth, {GlobalKey<NavigatorState>? navigatorKey}) {
   return GoRouter(
+    navigatorKey: navigatorKey,
     initialLocation: Rutas.login,
     debugLogDiagnostics: false,
     refreshListenable: _EscuchaDeEstado(auth.stream),

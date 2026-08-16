@@ -11,13 +11,17 @@ SIE / BD colegio (Supabase por tenant)
        ↓
 Canal Django (VPS) + Redis + Celery worker/beat
   → BD central del canal (otro Supabase)
-  → FCM Admin → app Asiscole Messenger
+  → FCM Admin → app Asis Messenger
        ↓
 Caddy/nginx (TLS) → 127.0.0.1:8000  bajo  /canal-api
 ```
 
 **Estado vivo del despliegue JP (qué ya se aplicó, APK, incidentes):**  
 [`estado-produccion.md`](estado-produccion.md).
+
+**Regla de alineación:** producción (VPS) es la fuente principal. Ante
+divergencias, el código/config del servidor manda sobre el working copy local,
+salvo un deploy intencional desde el repo.
 
 Referencias relacionadas:
 
@@ -119,7 +123,7 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs --tail=50 worker
 ```
 
-APK en tu PC: `.\scripts\ops_local_release.ps1` (genera `Asiscole_Messenger.apk`).
+APK en tu PC: `.\scripts\ops_local_release.ps1` (genera `Asis_Messenger.apk`).
 
 ### 2.3 Qué NO tocar en un update
 

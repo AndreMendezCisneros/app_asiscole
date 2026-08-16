@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Tokens y tema de marca Asiscole Messenger.
+/// Tokens y tema de marca Asis Messenger.
 class AppTheme {
   const AppTheme._();
 

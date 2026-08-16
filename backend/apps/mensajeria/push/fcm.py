@@ -107,7 +107,7 @@ class ProveedorFCM(ProveedorPush):
                 tokens=lote,
                 data=mensaje.como_datos(),
                 notification=messaging.Notification(
-                    title="Asiscole Messenger",
+                    title="Asis Messenger",
                     body=cuerpo,
                 ),
                 android=messaging.AndroidConfig(
@@ -165,6 +165,7 @@ def _cuerpo_generico(tipo: str) -> str:
         "salida": "Hay un nuevo aviso de salida",
         "incidencia": "Hay una nueva incidencia",
         "aviso": "Tienes un nuevo aviso del colegio",
+        "nota": "Hay una nueva nota",
     }.get((tipo or "").strip().lower(), "Tienes un nuevo mensaje")
 
 

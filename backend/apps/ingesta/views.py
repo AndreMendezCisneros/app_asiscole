@@ -15,7 +15,9 @@ from apps.ingesta.permissions import EsIngestAutenticado
 
 class EventoIngestaSerializer(serializers.Serializer):
     tenant_id = serializers.CharField(max_length=100)
-    tipo = serializers.ChoiceField(choices=["entrada", "salida", "incidencia", "aviso"])
+    tipo = serializers.ChoiceField(
+        choices=["entrada", "salida", "incidencia", "aviso", "nota"]
+    )
     id_estudiante = serializers.IntegerField(min_value=1)
     id_registro = serializers.IntegerField(min_value=1)
     payload = serializers.JSONField()

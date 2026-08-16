@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.permissions import PermitirSinToken
+from apps.common.red import ip_de as _ip_de
 from apps.cuentas import services, tokens
 from apps.cuentas.authentication import SessionTokenAuthentication
 from apps.cuentas.permissions import EsApoderadoConSessionToken
@@ -28,21 +29,6 @@ from apps.cuentas.serializers import (
     SolicitudTransferenciaRespuestaSerializer,
     SolicitudTransferenciaSerializer,
 )
-
-
-def _ip_de(request: Request) -> str | None:
-    """Devuelve la IP de origen, respetando el proxy inverso.
-
-    Con un solo proxy de confianza (Caddy), el hop añadido es el último de
-    `X-Forwarded-For`. Tomar el primero permitiría spoofing del cliente.
-    La IP es un dato personal: se hashea antes de cache/BD; nunca en logs.
-    """
-    reenviada = request.headers.get("X-Forwarded-For", "")
-    if reenviada:
-        partes = [p.strip() for p in reenviada.split(",") if p.strip()]
-        if partes:
-            return partes[-1]
-    return request.META.get("REMOTE_ADDR")
 
 
 def _token_de_sesion(request: Request) -> str:

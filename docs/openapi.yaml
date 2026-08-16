@@ -49,6 +49,10 @@ tags:
     description: Agenda de entradas y salidas
   - name: incidencias
     description: Incidencias del estudiante
+  - name: notas
+    description: Notas semanales del estudiante (ingesta, no lectura live al colegio)
+  - name: ingesta
+    description: Eventos que empuja el SIE hacia el canal
   - name: perfil
     description: Perfil, estudiantes vinculados y eliminación de cuenta
   - name: admin
@@ -460,6 +464,36 @@ paths:
         "404": { $ref: "#/components/responses/StudentLinkNotFound" }
         "503": { $ref: "#/components/responses/UpstreamSchoolDbUnavailable" }
 
+  # ---------------------------------------------------------------- notas ----
+  /notas:
+    get:
+      tags: [notas]
+      summary: Historial de notas semanales del estudiante activo
+      description: |
+        Lista las notas que el SIE empujó con `POST /ingesta/eventos` y
+        `tipo: nota`. Viven en la BD central (`asis_nota`), no se leen de la
+        BD del colegio. El aislamiento es el mismo que en asistencias: el
+        `estudiante_id` se contrasta con el directorio y el `tenant_id` del
+        vínculo activo. Un padre de Jean Piaget no ve notas de Academy.
+
+        Orden: más reciente primero (`fecha_inicio`, luego `semana_codigo`).
+      parameters:
+        - $ref: "#/components/parameters/EstudianteId"
+      responses:
+        "200":
+          description: Notas del estudiante en el colegio del vínculo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/NotaSemanal" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/RoleNotAllowed" }
+        "404": { $ref: "#/components/responses/StudentLinkNotFound" }
+
   # -------------------------------------------------------------- perfil ----
   /perfil:
     get:
@@ -694,20 +728,29 @@ paths:
   /ingesta/eventos:
     post:
       tags: [ingesta]
-      summary: Recibir evento del colegio (entrada, salida o incidencia)
+      summary: Recibir evento del colegio (entrada, salida, incidencia, aviso o nota)
       description: |
         Alternativa al outbox (`001_colegio_outbox.sql`). Asiscole (u otro sistema
-        escolar) llama este endpoint cuando registra un evento y el canal genera
-        el mensaje + push para los apoderados vinculados.
+        escolar) llama este endpoint cuando registra un evento.
+
+        Destinos (no mezclarlos):
+
+        - `entrada` / `salida` → mensaje en bandeja **y** sección Asistencias
+          (la sección se lee live de la BD del colegio).
+        - `incidencia` → mensaje en bandeja **y** sección Incidencias (live).
+        - `aviso` → **solo** bandeja. `payload.contexto` distingue `pension` y
+          `cita` (tarjeta opcional). No crear registro de sección.
+        - `nota` → **sección Notas** (`asis_nota`). No va a la bandeja.
+          Deduplica por `(tenant_id, id_estudiante, id_registro)`.
 
         Autenticación: cabecera `X-Asiscole-Ingest-Key` con el valor de
         `INGEST_API_KEY` del backend. No usa JWT de apoderado.
 
-        Idempotencia: el mismo `(tipo, id_registro)` no duplica mensajes por
-        apoderado (`origen_evento = "{tipo}:{id_registro}"`).
+        Idempotencia de bandeja: el mismo `(tipo, id_registro)` no duplica
+        mensajes por apoderado (`origen_evento = "{tipo}:{id_registro}"`).
 
-        El `payload` sigue la misma forma que escribe el trigger del outbox
-        (nombre, grado, hora, estado, etc.). No enviar teléfono ni codigo_barras.
+        El `payload` sigue la misma forma que escribe el trigger del outbox.
+        No enviar teléfono ni codigo_barras.
       security:
         - ingestApiKey: []
       requestBody:
@@ -732,6 +775,43 @@ paths:
                     fecha: "2026-07-25"
                     hora_llegada: "07:45"
                     estado: "A tiempo"
+              cita:
+                summary: Citación (bandeja, igual que pensión)
+                value:
+                  tenant_id: asis_academy
+                  tipo: aviso
+                  id_estudiante: 10
+                  id_registro: 44
+                  payload:
+                    nombre_completo: "Ana Pérez"
+                    grado: "2003"
+                    seccion: "5"
+                    nivel_educativo: Pre-universitario
+                    contexto: cita
+                    fecha: "2026-08-20"
+                    hora: "09:30"
+                    motivo: "Revisión de incidencias"
+                    alcance: individual
+                    texto_libre: "Se citó a los padres de Ana Pérez el 20/08/2026 a las 09:30."
+              nota:
+                summary: Nota semanal (sección Notas, no bandeja)
+                value:
+                  tenant_id: asis_academy
+                  tipo: nota
+                  id_estudiante: 10
+                  id_registro: 991
+                  payload:
+                    semana_codigo: "2026-02"
+                    semana_etiqueta: "Semana 2"
+                    fecha_inicio: "2026-02-03"
+                    fecha_fin: "2026-02-09"
+                    nota: "18.5"
+                    nota_maxima: "20"
+                    area_codigo: salud
+                    area_nombre: "Ciencias de la Salud"
+                    carrera: "Medicina Humana"
+                    registrado_en: "2026-08-15T15:00:00-05:00"
+                    texto_libre: "Se registró la nota semanal de Ana Pérez: 18.5/20 (Semana 2)."
       responses:
         "202":
           description: Evento aceptado (puede haber 0 destinatarios si nadie está vinculado aún)
@@ -741,7 +821,7 @@ paths:
                 type: object
                 required: [creados, origen_evento]
                 properties:
-                  creados: { type: integer, description: Mensajes nuevos insertados }
+                  creados: { type: integer, description: Mensajes o filas de nota nuevas }
                   origen_evento: { type: string, example: "entrada:1042" }
                   apoderados_notificados: { type: integer }
         "400": { $ref: "#/components/responses/ValidationError" }
@@ -761,6 +841,48 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FeatureFlags" }
+
+  /sistema/version-app:
+    get:
+      tags: [sistema]
+      summary: Versión mínima y última disponible de la app
+      security: []
+      description: |
+        La consulta el cliente al arrancar, **antes** de tener sesión: si una
+        versión sale con un fallo grave hay que poder cortarla sin esperar a que
+        el apoderado abra Play.
+
+        `actualizacion_obligatoria` lo decide el servidor comparando la cabecera
+        `X-App-Version` (el `versionCode`) con `min_soportada`. El cliente no
+        recalcula nada: solo obedece el booleano.
+
+        Falla abierto: si el endpoint no responde, la app arranca igual.
+      parameters:
+        - in: query
+          name: plataforma
+          required: true
+          schema: { type: string, enum: [android, ios] }
+        - in: header
+          name: X-App-Version
+          required: false
+          description: "`versionCode` instalado. Sin él, `actualizacion_obligatoria` es false."
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Política de versiones vigente
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionApp" }
+        "400":
+          description: Plataforma no soportada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Demasiadas consultas desde la misma IP
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
 components:
   securitySchemes:
@@ -927,18 +1049,74 @@ components:
                   url: { type: string, format: uri }
                   tipo_mime: { type: string }
 
+    NotaSemanal:
+      type: object
+      required: [id, id_registro, nota]
+      properties:
+        id: { type: string, format: uuid }
+        id_registro:
+          type: integer
+          description: PK de `notas_semana` en el colegio. Deduplica la ingesta.
+        semana_codigo: { type: string, nullable: true, example: "2026-02" }
+        semana_etiqueta: { type: string, nullable: true, example: "Semana 2" }
+        fecha_inicio: { type: string, format: date, nullable: true }
+        fecha_fin: { type: string, format: date, nullable: true }
+        nota: { type: string, example: "18.5" }
+        nota_maxima: { type: string, nullable: true, example: "20" }
+        area_codigo: { type: string, nullable: true }
+        area_nombre: { type: string, nullable: true }
+        carrera: { type: string, nullable: true }
+        registrado_en: { type: string, format: date-time, nullable: true }
+
     FeatureFlags:
       type: object
       required: [notas, citacion]
       properties:
         notas:
           type: boolean
-          description: Módulo de notas (deshabilitado por defecto).
+          description: |
+            Módulo de notas. Deshabilitado por defecto (Jean Piaget no lo usa).
+            Activarlo muestra la pestaña con el historial ingerido (`asis_nota`).
         citacion:
           type: boolean
           description: Módulo de citación (stub; deshabilitado por defecto).
       additionalProperties: { type: boolean }
       example: { notas: false, citacion: false }
+
+    VersionApp:
+      type: object
+      required:
+        [plataforma, min_soportada, ultima_disponible, actualizacion_obligatoria]
+      properties:
+        plataforma: { type: string, enum: [android, ios] }
+        min_soportada:
+          type: integer
+          description: "`versionCode` mínimo que el backend acepta."
+        ultima_disponible:
+          type: integer
+          description: "`versionCode` publicado en la tienda."
+        actualizacion_obligatoria:
+          type: boolean
+          description: True si la versión instalada es menor que `min_soportada`.
+        actualizacion_disponible:
+          type: boolean
+          description: True si hay una versión más nueva, sin ser obligatoria.
+        mensaje:
+          type: string
+          nullable: true
+          description: Texto que la app muestra. Lo redacta el backend.
+        url_tienda:
+          type: string
+          nullable: true
+          description: Ficha de la tienda. En reparto por sideload puede ir vacío.
+      example:
+        plataforma: android
+        min_soportada: 1
+        ultima_disponible: 2
+        actualizacion_obligatoria: false
+        actualizacion_disponible: true
+        mensaje: Hay una versión nueva de Asis Messenger.
+        url_tienda: https://play.google.com/store/apps/details?id=pe.asiscole.asiscole_app
 
     Perfil:
       type: object
@@ -999,16 +1177,23 @@ components:
           example: jean_piaget
         tipo:
           type: string
-          enum: [entrada, salida, incidencia, aviso]
+          enum: [entrada, salida, incidencia, aviso, nota]
         id_estudiante: { type: integer }
         id_registro:
           type: integer
-          description: PK en el colegio (registros_llegada o incidencias)
+          description: |
+            PK en el colegio. Para `aviso` con `contexto: cita` es
+            `citas_padres.id_cita`. Para `nota` es `notas_semana.id`.
         payload:
           type: object
           description: |
-            Datos para la plantilla (misma forma que `asis_outbox.payload`).
-            Mínimo recomendado entrada: nombre_completo, fecha, hora_llegada, estado.
+            Datos para la plantilla o para `asis_nota` (misma forma que
+            `asis_outbox.payload`).
+            Aviso de cita: `contexto: cita`, `texto_libre` (obligatorio),
+            `fecha`, `hora`, `motivo`, `alcance` (`individual` | `apafa` |
+            `piso` | `salon`).
+            Nota: `semana_codigo` o `semana_etiqueta`, `nota`, `nota_maxima`,
+            `fecha_inicio`, `fecha_fin`, `area_nombre`, `carrera`.
             No incluir telefono_contacto ni codigo_barras.
           additionalProperties: true
 

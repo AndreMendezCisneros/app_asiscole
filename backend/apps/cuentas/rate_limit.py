@@ -262,3 +262,37 @@ def registrar_transferencia(apoderado_id: int) -> int:
         Cuantas solicitudes lleva el apoderado en la ventana.
     """
     return _sumar(_clave_transferencias(apoderado_id), 3600)
+
+
+# ---------------------------------------------------------------------------
+# Endpoints publicos que no son login
+# ---------------------------------------------------------------------------
+
+def verificar_publico_por_ip(nombre: str, ip: str | None, *, maximo: int, ventana: int) -> None:
+    """Limita un endpoint publico por IP, **fallando abierto**.
+
+    Al contrario que el login, aqui no hay nada que proteger por fuerza bruta:
+    solo se evita que alguien lo use de amplificador. Si Redis no responde se
+    deja pasar, porque bloquear el arranque de la app por eso seria mucho peor
+    que atender unas peticiones de mas.
+
+    Args:
+        nombre: Identificador del endpoint, para no mezclar contadores.
+        ip: IP de origen; sin ella no se limita nada.
+        maximo: Peticiones permitidas en la ventana.
+        ventana: Tamano de la ventana, en segundos.
+
+    Raises:
+        TooManyRequests: Se supero el limite para esa IP.
+    """
+    if not ip:
+        return
+    clave = f"{_PREFIJO}:publico:{nombre}:{_hash_ip(ip)}"
+    try:
+        usadas = _sumar(clave, max(1, ventana))
+    except Exception:  # noqa: BLE001 — fail-open deliberado
+        logger.warning("rate_limit_publico_sin_cache", extra={"endpoint": nombre})
+        return
+    if usadas > max(1, maximo):
+        logger.info("rate_limit_publico_excedido", extra={"endpoint": nombre})
+        raise TooManyRequests()

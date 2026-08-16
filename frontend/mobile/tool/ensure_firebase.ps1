@@ -15,6 +15,14 @@ function Es-Stub([string]$path) {
   return ($t -match 'REPLACE_WITH_FIREBASE' -or $t -match 'replace-with-project-id')
 }
 
+# firebase_options.dart no se versiona (claves reales). Un clon nuevo no lo trae,
+# así que se deja el stub para que `flutter analyze` y `flutter test` compilen.
+# El release no se salva con esto: más abajo se exige el archivo de secrets.
+if (-not (Test-Path $opts)) {
+  Copy-Item -Force (Join-Path $root "lib\firebase_options.dart.example") $opts
+  Write-Host "OK: firebase_options.dart creado desde el .example (stub)"
+}
+
 if (Es-Stub $opts) {
   if (-not (Test-Path $secOpts)) {
     Write-Error "firebase_options.dart es stub y no hay $secOpts"

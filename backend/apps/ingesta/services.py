@@ -187,9 +187,40 @@ def procesar_lote_tenant(tenant_id: str) -> dict[str, int]:
     for fila in filas:
         outbox_id = int(fila["id"])
         try:
+            tipo_evento = str(fila["tipo"] or "").strip().lower()
+            if tipo_evento == "nota":
+                from apps.mensajeria.notas import upsert_nota
+                from apps.mensajeria.tasks import enviar_push_seccion
+
+                nota, created = upsert_nota(
+                    tenant_id=tenant_id,
+                    id_estudiante=int(fila["id_estudiante"]),
+                    id_registro=int(fila["id_registro"]),
+                    payload=_payload_como_dict(fila["payload"]),
+                )
+                if created:
+                    creados += 1
+                    for apoderado in _apoderados_destino(
+                        tenant_id, int(fila["id_estudiante"])
+                    ):
+                        try:
+                            enviar_push_seccion.delay(
+                                apoderado.pk,
+                                str(nota.pk),
+                                "nota",
+                                f"notas/{nota.pk}",
+                            )
+                        except Exception:  # noqa: BLE001
+                            logger.warning(
+                                "push_enqueue_nota_fallido",
+                                extra={"tenant": tenant_id, "nota_id": str(nota.pk)},
+                            )
+                marcar_procesado(tenant_id, outbox_id)
+                continue
+
             mensajes = crear_mensajes_desde_evento(
                 tenant_id=tenant_id,
-                tipo=str(fila["tipo"]),
+                tipo=tipo_evento,
                 id_estudiante=int(fila["id_estudiante"]),
                 id_registro=int(fila["id_registro"]),
                 payload=_payload_como_dict(fila["payload"]),

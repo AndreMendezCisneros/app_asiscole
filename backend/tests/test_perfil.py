@@ -8,6 +8,7 @@ from apps.common.errors import StudentLinkNotFound
 from apps.cuentas.models import CUENTA_ELIMINADA, SESION_ACTIVA, Apoderado, SesionActiva
 from apps.cuentas.perfil_services import eliminar_cuenta, listar_estudiantes, obtener_perfil
 from apps.directorio.models import VINCULO_ACTIVO, Directorio
+from apps.mensajeria.models import TEXTO_ANONIMIZADO, TIPO_ENTRADA, Mensaje
 from django.utils import timezone
 from datetime import timedelta
 import uuid
@@ -66,6 +67,47 @@ def test_eliminar_cuenta_anonimiza_y_revoca():
     assert apo.estado == CUENTA_ELIMINADA
     assert apo.telefono.startswith("deleted:")
     assert SesionActiva.objects.filter(apoderado=apo, estado=SESION_ACTIVA).count() == 0
+
+
+@pytest.mark.django_db
+def test_eliminar_cuenta_anonimiza_los_mensajes_del_apoderado():
+    """El texto y la metadata llevan el nombre del menor: no esperan los 24 meses."""
+    apo = Apoderado.objects.create(telefono="+51988888887")
+    Directorio.objects.create(
+        telefono=apo.telefono,
+        tenant_id="jean_piaget",
+        id_estudiante=4,
+        codigo_barras="70444444",
+        nombre_estudiante="Hija",
+        estado_vinculo=VINCULO_ACTIVO,
+    )
+    mensaje = Mensaje.objects.create(
+        apoderado=apo,
+        tenant_id="jean_piaget",
+        id_estudiante=4,
+        tipo=TIPO_ENTRADA,
+        texto="Hija ingresó al colegio a las 7:45 a. m.",
+        metadata={"estudiante_nombre": "Hija", "grado": "3"},
+    )
+    # Mensaje de otra cuenta: debe quedar intacto.
+    otra = Apoderado.objects.create(telefono="+51988888886")
+    ajeno = Mensaje.objects.create(
+        apoderado=otra,
+        tenant_id="jean_piaget",
+        id_estudiante=5,
+        tipo=TIPO_ENTRADA,
+        texto="Otro estudiante ingresó al colegio.",
+        metadata={"estudiante_nombre": "Otro"},
+    )
+
+    eliminar_cuenta(apo, "70444444")
+
+    mensaje.refresh_from_db()
+    assert mensaje.texto == TEXTO_ANONIMIZADO
+    assert mensaje.metadata == {}
+    ajeno.refresh_from_db()
+    assert ajeno.texto != TEXTO_ANONIMIZADO
+    assert ajeno.metadata["estudiante_nombre"] == "Otro"
 
 
 @pytest.mark.django_db

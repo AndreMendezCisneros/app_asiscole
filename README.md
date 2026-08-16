@@ -112,7 +112,7 @@ APK de distribución:
 
 ```powershell
 .\scripts\ops_local_release.ps1
-# → frontend/mobile/build/app/outputs/flutter-apk/Asiscole_Messenger.apk
+# → frontend/mobile/build/app/outputs/flutter-apk/Asis_Messenger.apk
 ```
 
 Despliegue: [docs/deploy-vps.md](docs/deploy-vps.md).  
@@ -124,4 +124,4 @@ Flujo:
 1. El colegio registra llegada/salida/incidencia en SIE JP.
 2. SIE hace `POST` de ingesta al canal (ya no WhatsApp/WPP).
 3. El backend crea el mensaje y notifica por push (FCM) si el dispositivo está registrado.
-4. El apoderado abre Asiscole Messenger y ve la bandeja vía HTTPS al VPS.
+4. El apoderado abre Asis Messenger y ve la bandeja vía HTTPS al VPS.

@@ -151,7 +151,10 @@ class LocalDb {
     );
   }
 
-  /// La caché la borra el apoderado; el cierre de sesión no la toca.
+  /// Borra los mensajes guardados en el teléfono.
+  ///
+  /// Se llama al cerrar sesión, al eliminar la cuenta y desde Perfil, porque el
+  /// contenido cacheado incluye el nombre del estudiante.
   Future<void> vaciar() async {
     final db = await database;
     await db.delete(tablaMensajes);

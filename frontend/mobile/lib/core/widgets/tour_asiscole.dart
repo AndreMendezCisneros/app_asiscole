@@ -83,7 +83,7 @@ class GuiasTour {
   static const mensajes = (
     titulo: 'Mensajes',
     cuerpo:
-        'Aquí llegan avisos de entrada, salida, incidencias y comunicados. '
+        'Aquí llegan avisos de entrada, salida, incidencias, citaciones y comunicados. '
         'Puedes filtrar no leídos y, si tienes hijos en distintos colegios, '
         'filtrar por colegio. Toca un mensaje para ver el detalle (solo lectura).',
   );
@@ -106,14 +106,14 @@ class GuiasTour {
   static const notas = (
     titulo: 'Notas',
     cuerpo:
-        'El módulo de notas se activará desde el colegio sin pedirte una '
-        'nueva versión de la app. Mientras tanto verás “Próximamente”.',
+        'Las notas semanales del hijo activo aparecen aquí cuando el colegio '
+        'las registra. Cada fila muestra la semana, la nota sobre 20 y el área.',
   );
 
   static const perfil = (
     titulo: 'Perfil',
     cuerpo:
-        'Aquí eliges el hijo activo (afecta asistencias e incidencias), '
+        'Aquí eliges el hijo activo (afecta asistencias, incidencias y notas), '
         'cierras sesión o eliminas tu cuenta. También puedes volver a ver '
         'esta guía.',
   );

@@ -43,6 +43,11 @@ TIPOS_MENSAJE = (
 #: Solo los codigos, para validar sin recorrer las tuplas.
 CODIGOS_TIPO_MENSAJE: tuple[str, ...] = tuple(codigo for codigo, _ in TIPOS_MENSAJE)
 
+#: Texto que queda al anonimizar un mensaje, sea por retencion o por eliminacion
+#: de la cuenta. La fila se conserva para no romper contadores ni idempotencia,
+#: pero pierde el nombre del estudiante y el resto de datos personales.
+TEXTO_ANONIMIZADO = "[eliminado]"
+
 
 def sumar_meses(momento: datetime, meses: int) -> datetime:
     """Suma meses de calendario a una fecha, recortando el dia si no existe.
@@ -150,3 +155,51 @@ class Mensaje(models.Model):
         )
         self.entregado = True
         self.entregado_en = ahora
+
+
+class NotaSemanal(models.Model):
+    """Nota semanal ingerida desde el SIE (`asis_nota`).
+
+    Vive en la BD central, no en la del colegio: el canal no escribe alli.
+    Un ingest `tipo=nota` inserta o actualiza por
+    `(tenant_id, id_estudiante, id_registro)`. No se copia a `asis_mensaje`:
+    la seccion Notas no es la bandeja.
+
+    No guarda `texto_libre` ni el nombre del estudiante (Ley N.o 29733).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant_id = models.TextField()
+    id_estudiante = models.IntegerField()
+    id_registro = models.IntegerField()
+    semana_codigo = models.TextField(null=True, blank=True)
+    semana_etiqueta = models.TextField(null=True, blank=True)
+    fecha_inicio = models.DateField(null=True, blank=True)
+    fecha_fin = models.DateField(null=True, blank=True)
+    nota = models.TextField()
+    nota_maxima = models.TextField(null=True, blank=True)
+    area_codigo = models.TextField(null=True, blank=True)
+    area_nombre = models.TextField(null=True, blank=True)
+    carrera = models.TextField(null=True, blank=True)
+    registrado_en = models.DateTimeField(null=True, blank=True)
+    emitido_en = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "asis_nota"
+        verbose_name = "Nota semanal"
+        verbose_name_plural = "Notas semanales"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant_id", "id_estudiante", "id_registro"],
+                name="asis_uniq_nota_origen",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["tenant_id", "id_estudiante", "-fecha_inicio"],
+                name="asis_idx_nota_estudiante",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"nota:{self.pk}"

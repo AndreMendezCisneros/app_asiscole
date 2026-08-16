@@ -65,11 +65,16 @@ class ApiError extends Equatable implements Exception {
     );
   }
 
+  /// Código deducido del estado HTTP cuando la respuesta no trae `code`.
+  ///
+  /// 403 y 404 se quedan fuera a propósito: un HTML del proxy (Caddy, un WAF)
+  /// no es una cuenta suspendida ni un vínculo inexistente, y traducirlo así
+  /// cerraba la sesión del apoderado por un problema de infraestructura.
+  /// `ACCOUNT_SUSPENDED` y `STUDENT_LINK_NOT_FOUND` solo llegan del canal, que
+  /// siempre responde con el cuerpo del contrato.
   static String _codigoPorEstado(int? status) => switch (status) {
         400 => CodigosError.validacion,
         401 => CodigosError.noAutenticado,
-        403 => CodigosError.cuentaSuspendida,
-        404 => CodigosError.vinculoNoEncontrado,
         409 => CodigosError.sesionYaActiva,
         410 => CodigosError.sesionExpirada,
         423 => CodigosError.cuentaBloqueada,

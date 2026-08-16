@@ -1,13 +1,15 @@
 /**
- * Smoke de carga: 100 usuarios virtuales contra el canal.
+ * Línea base del host actual (Hetzner compartido ~4 vCPU / 8 GB, Gunicorn 3×2).
  *
- * Uso (staging, NUNCA en horario escolar sin acuerdo):
- *   k6 run -e BASE_URL=https://host/canal-api/v0.1 \
+ * NO usar el script de 1000 VU contra este host: mide el techo de 6 workers y
+ * puede degradar el SIE que vive en la misma máquina.
+ *
+ * Uso (staging o prod fuera de horario escolar, con OK explícito):
+ *   k6 run -e BASE_URL=https://jeanpiaget.asiscole.com/canal-api/v0.1 \
  *          -e DATA_TOKEN=eyJ... \
  *          scripts/load/k6_canal_100vu.js
  *
- * Los VUs reutilizan un data_token de una cuenta de prueba (no hacen login
- * masivo: sesión única + rate-limit).
+ * Un data_token de cuenta de prueba (no login masivo: sesión única + rate-limit).
  */
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -17,16 +19,16 @@ const errorRate = new Rate('errors');
 
 export const options = {
   stages: [
-    { duration: '30s', target: 20 },
-    { duration: '1m', target: 50 },
-    { duration: '1m', target: 100 },
-    { duration: '1m', target: 100 },
+    { duration: '30s', target: 15 },
+    { duration: '1m', target: 30 },
+    { duration: '1m', target: 40 },
+    { duration: '1m', target: 40 },
     { duration: '30s', target: 0 },
   ],
   thresholds: {
-    http_req_failed: ['rate<0.01'],
-    http_req_duration: ['p(95)<800'],
-    errors: ['rate<0.01'],
+    http_req_failed: ['rate<0.02'],
+    http_req_duration: ['p(95)<1500'],
+    errors: ['rate<0.02'],
   },
 };
 

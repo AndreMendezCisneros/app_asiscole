@@ -25,13 +25,30 @@ void main() {
     expect(FechasLima.horaAmPm(dt).toLowerCase(), contains('1:33'));
   });
 
-  test('parseInstanteApi corrige UTC etiquetado como Lima (-05)', () {
-    // VPS legacy: 18:47 UTC con offset -05 → absoluto 23:47 (futuro).
-    // Debe reinterpretarse como 18:47Z = 13:47 Lima.
-    final dt = parseInstanteApi('2026-07-27T18:47:52.185087-05:00');
+  test('parseInstanteApi acepta UTC con sufijo Z', () {
+    // Formato que emite el canal (`_emitido_iso` del backend).
+    final dt = parseInstanteApi('2026-07-27T18:33:00.185087Z');
     expect(dt.isUtc, isTrue);
     expect(dt.hour, 18);
-    expect(FechasLima.horaAmPm(dt).toLowerCase(), contains('1:47'));
+    expect(FechasLima.horaAmPm(dt).toLowerCase(), contains('1:33'));
+  });
+
+  test('parseInstanteApi respeta el offset explícito, no lo reinterpreta', () {
+    // 18:47 con offset -05 es 23:47 UTC y así se toma. No hay heurística que
+    // compare con el reloj del dispositivo: el mismo texto debe dar siempre el
+    // mismo instante, se lea en caliente o desde la caché meses después.
+    final dt = parseInstanteApi('2026-07-27T18:47:52.185087-05:00');
+    expect(dt.isUtc, isTrue);
+    expect(dt.hour, 23);
+  });
+
+  test('parseInstanteApi es estable en el tiempo', () {
+    // Regresión: la versión anterior corregía los instantes que caían más de
+    // dos horas en el futuro, así que una fecha futura se leía distinto según
+    // el día en que se ejecutara la prueba.
+    final futuro = DateTime.now().toUtc().add(const Duration(days: 30));
+    final texto = futuro.toIso8601String();
+    expect(parseInstanteApi(texto), futuro);
   });
 
   test('parseInstanteApi respeta Lima correcto (-05)', () {

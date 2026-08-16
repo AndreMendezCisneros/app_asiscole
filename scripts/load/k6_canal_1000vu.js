@@ -1,6 +1,9 @@
 /**
  * Carga agresiva para VPS Opción B (~8 CPU / 32 GB, Gunicorn 8×4).
  *
+ * NO ejecutar contra el host actual compartido (4 vCPU / 8 GB). Usa
+ * k6_canal_100vu.js (ajustado a 40 VU) para la línea base de producción.
+ *
  * Uso (staging / ventana acordada — NO en horario escolar a ciegas):
  *   k6 run -e BASE_URL=https://host/canal-api/v0.1 \
  *          -e DATA_TOKEN=eyJ... \

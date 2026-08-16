@@ -12,7 +12,7 @@ from django.utils.dateparse import parse_datetime
 
 from apps.common.errors import ValidationError
 from apps.cuentas.models import Apoderado
-from apps.mensajeria.models import Mensaje
+from apps.mensajeria.models import TEXTO_ANONIMIZADO, Mensaje
 
 
 def _decodificar_cursor(cursor: str | None) -> datetime | None:
@@ -130,6 +130,26 @@ def listar_mensajes(
         "next_cursor": next_cursor,
         "no_leidos_por_canal": no_leidos,
     }
+
+
+def anonimizar_mensajes_de(apoderado: Apoderado) -> int:
+    """Quita los datos personales de la bandeja de un apoderado (Ley N.º 29733).
+
+    Se usa al eliminar la cuenta: el `texto` y la `metadata` llevan el nombre del
+    estudiante, así que esperar a la purga por retención (24 meses) dejaría datos
+    de un menor en la BD después de ejercer el derecho de cancelación.
+
+    Las filas se conservan anonimizadas, no se borran: el expediente del colegio
+    no se toca y la restricción de idempotencia de la ingesta sigue en pie.
+
+    Returns:
+        Cuántos mensajes se anonimizaron.
+    """
+    return (
+        Mensaje.objects.filter(apoderado=apoderado)
+        .exclude(texto=TEXTO_ANONIMIZADO)
+        .update(texto=TEXTO_ANONIMIZADO, metadata={})
+    )
 
 
 def marcar_leidos(apoderado: Apoderado, ids: list[str]) -> int:

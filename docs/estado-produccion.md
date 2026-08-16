@@ -1,9 +1,13 @@
 # Estado de producción — Canal Asiscole Messenger
 
-Actualizado: **2026-08-11**.
+Actualizado: **2026-08-13**.
 
 Documento de verdad operativa: qué está desplegado, qué APK distribuir y qué
 lecciones no repetir. Complementa [`deploy-vps.md`](deploy-vps.md).
+
+**Prioridad:** lo que corre en **producción (VPS)** es la fuente principal.
+Si local y prod divergen, se alinea el repo/local hacia prod (salvo un cambio
+local explícito que se vaya a desplegar a propósito).
 
 ---
 
@@ -103,7 +107,7 @@ Debug y release apuntan al VPS:
 
 Artefacto:
 
-`frontend/mobile/build/app/outputs/flutter-apk/Asiscole_Messenger.apk`
+`frontend/mobile/build/app/outputs/flutter-apk/Asis_Messenger.apk`
 
 (~51 MB; último build local 2026-07-30). Incluye ofuscación Dart + R8, Firebase
 desde `secrets/`. Sin `android/key.properties` se firma con clave de debug
@@ -150,9 +154,32 @@ El canal habla con **BD central + N BDs de colegio** (`SCHOOL_DATABASES`).
 
 Ingesta acepta `entrada` \| `salida` \| `incidencia` \| `aviso`.
 
+Tras este trabajo hay que aplicar en la central `administracion.0003_semilla_version_app`
+(`manage.py migrate`) y, si se opera por SQL, [`db/migrations/008_central_app_version.sql`](../db/migrations/008_central_app_version.sql).
+La app pasa a `1.0.1+2`. `min_soportada` se deja en **1** a propósito: los APK
+ya repartidos siguen funcionando.
+
 ---
 
-## 7. Hardware futuro (Opción B)
+## 7. Precondiciones de red (no romper el rate-limit)
+
+Caddy es hoy el **único** proxy de confianza. El canal toma la IP de origen del
+**último** salto de `X-Forwarded-For` (`apps.cuentas.views._ip_de` /
+`apps.common.red.ip_de`). Eso es correcto con un hop.
+
+Si se pone **Cloudflare** (u otro CDN) delante de Caddy, el último salto pasa a
+ser la IP del edge, compartida por todos los apoderados: tres fallos de login de
+cualquiera bloquearían a todos. En ese caso hay que leer `CF-Connecting-IP` (o
+configurar el número de hops de confianza) **antes** de activar el proxy. No es
+un cambio de código que se pueda dejar para después: el rate-limit se volvería
+global sin ningún aviso.
+
+La carga contra este host se mide con `scripts/load/k6_canal_100vu.js` (40 VU,
+p95 &lt; 1,5 s). El script de 1000 VU es solo para la Opción B.
+
+---
+
+## 8. Hardware futuro (Opción B)
 
 Cuando haya VPS dedicado ~8 CPU / 32 GB: subir en `.env` a los defaults del
 compose (`GUNICORN_WORKERS=8`, `THREADS=4`, `CELERY_CONCURRENCY=6`, Redis 2 GB)
@@ -160,7 +187,7 @@ y **no** mezclar con SIE en el mismo host. Detalle: [`deploy-vps.md`](deploy-vps
 
 ---
 
-## 8. Documentación relacionada
+## 9. Documentación relacionada
 
 | Doc | Contenido |
 | --- | --- |

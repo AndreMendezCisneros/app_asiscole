@@ -20,15 +20,18 @@ class AuthRepository {
     required SessionStorage almacen,
     required InfoDispositivo dispositivo,
     Future<String?> Function()? obtenerPushToken,
+    Future<void> Function()? borrarCacheMensajes,
   })  : _api = api,
         _almacen = almacen,
         _dispositivo = dispositivo,
-        _obtenerPushToken = obtenerPushToken;
+        _obtenerPushToken = obtenerPushToken,
+        _borrarCacheMensajes = borrarCacheMensajes;
 
   final AuthApi _api;
   final SessionStorage _almacen;
   final InfoDispositivo _dispositivo;
   final Future<String?> Function()? _obtenerPushToken;
+  final Future<void> Function()? _borrarCacheMensajes;
 
   Future<Sesion> login({
     required String telefono,
@@ -115,8 +118,11 @@ class AuthRepository {
 
   Future<void> guardarPerfil(Perfil perfil) => _almacen.guardarPerfil(perfil);
 
-  /// Cierra sesión en el backend y borra los tokens. La caché de mensajes
-  /// permanece, es del apoderado.
+  /// Cierra sesión en el backend y borra los tokens y la caché de mensajes.
+  ///
+  /// La caché guarda el nombre del estudiante y el texto de los avisos, así que
+  /// no debe sobrevivir al cierre de sesión: el teléfono puede ser compartido y
+  /// la eliminación de cuenta pasa por aquí (Ley N.º 29733, minimización).
   Future<void> cerrarSesion() async {
     try {
       await _api.logout();
@@ -124,6 +130,15 @@ class AuthRepository {
       // Aunque el backend no responda, la sesión local se cierra igual.
     } finally {
       await _almacen.limpiarTokens();
+      await _borrarCache();
+    }
+  }
+
+  Future<void> _borrarCache() async {
+    try {
+      await _borrarCacheMensajes?.call();
+    } on Object {
+      // Si la base local no abre, el cierre de sesión no debe fallar por eso.
     }
   }
 

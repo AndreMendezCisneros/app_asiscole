@@ -16,6 +16,8 @@ import '../../../core/widgets/fondo_asiscole.dart';
 import '../../../core/widgets/pantalla_carga_asiscole.dart';
 import '../../../core/widgets/search_field_asiscole.dart';
 import '../../../core/widgets/tour_asiscole.dart';
+import '../../auth/presentation/auth_cubit.dart';
+import '../../auth/presentation/auth_state.dart';
 import '../../perfil/data/perfil_repository.dart';
 import '../domain/mensaje.dart';
 import 'mensajes_cubit.dart';
@@ -50,6 +52,10 @@ class _VistaState extends State<_Vista>
   Timer? _debounceBusqueda;
   List<EstudianteVinculado> _hijos = [];
 
+  /// Margen entre sincronizaciones al volver a la app (T-02).
+  static const Duration _margenRefrescoAlVolver = Duration(seconds: 45);
+  DateTime? _ultimoRefrescoAlVolver;
+
   @override
   String get rutaDeEstaSeccion => '/mensajes';
 
@@ -77,10 +83,34 @@ class _VistaState extends State<_Vista>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) {
-      // Sin FCM el listado no se entera solo; al volver a la app refrescamos.
-      context.read<MensajesCubit>().cargar(silencioso: true);
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    // Sin FCM el listado no se entera solo; al volver a la app refrescamos.
+    // Con margen: alternar con otra app diez veces no debe costar diez
+    // sincronizaciones de datos y batería.
+    final ultimo = _ultimoRefrescoAlVolver;
+    final ahora = DateTime.now();
+    if (ultimo != null && ahora.difference(ultimo) < _margenRefrescoAlVolver) {
+      return;
     }
+    _ultimoRefrescoAlVolver = ahora;
+    context.read<MensajesCubit>().cargar(silencioso: true);
+  }
+
+  /// True si el shell ya está mostrando su propia barra de «sin conexión».
+  bool _bannerDelShellVisible(BuildContext context) =>
+      context.select<AuthCubit, bool>(
+        (cubit) => cubit.state is OfflineMessagesOnly,
+      );
+
+  void _limpiarFiltros() {
+    _busqueda.clear();
+    _debounceBusqueda?.cancel();
+    setState(() {
+      _filtro = 'todos';
+      _consulta = '';
+      _filtroColegio = null;
+      _filtroHijoId = null;
+    });
   }
 
   Future<void> _cargarHijos() async {
@@ -215,7 +245,10 @@ class _VistaState extends State<_Vista>
                           onCambiar: () => context.go(Rutas.perfil),
                         ),
                       ),
-                    if (listos.offline)
+                    // El shell ya muestra su barra ámbar cuando la sesión está
+                     // en modo offline; se evita el aviso duplicado y solo se
+                     // informa cuando el fallo es de la sincronización.
+                    if (listos.offline && !_bannerDelShellVisible(context))
                       const Padding(
                         padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: Row(
@@ -315,9 +348,15 @@ class _VistaState extends State<_Vista>
                                   : 'Aún no tienes mensajes',
                             )
                           : filtrados.isEmpty
-                              ? const EmptyStateAsiscole(
-                                  mensaje: 'No hay mensajes con ese filtro',
+                              ? EmptyStateAsiscole(
+                                  mensaje: _consulta.isEmpty
+                                      ? 'No hay mensajes con ese filtro'
+                                      : 'Sin resultados para «$_consulta».\n'
+                                          'La búsqueda solo mira los mensajes '
+                                          'descargados en este teléfono.',
                                   mostrarLogo: false,
+                                  etiquetaReintentar: 'Quitar filtros',
+                                  onReintentar: _limpiarFiltros,
                                 )
                               : RefreshIndicator(
                                   onRefresh: () => context
@@ -405,7 +444,7 @@ class _FilaMensaje extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (icono, color, etiqueta) = _estiloTipo(mensaje.tipo);
+    final (icono, color, etiqueta) = _estiloTipo(mensaje.tipo, mensaje.metadata);
     final nombreHijo = (mensaje.estudianteNombre ?? '').trim();
     final primerNombre = nombreHijo.isEmpty
         ? ''
@@ -556,17 +595,35 @@ class _FilaMensaje extends StatelessWidget {
     );
   }
 
-  static (IconData, Color, String) _estiloTipo(String tipo) => switch (tipo) {
-        'entrada' => (Icons.login_rounded, AppTheme.verdeEntrada, 'Entrada'),
-        'salida' => (Icons.logout_rounded, AppTheme.indigoSalida, 'Salida'),
-        'incidencia' => (
-            Icons.warning_amber_rounded,
-            AppTheme.ambarIncidencia,
-            'Incidencia',
-          ),
-        'aviso' => (Icons.campaign_outlined, AppTheme.moradoSecundario, 'Aviso'),
-        _ => (Icons.mail_outline, AppTheme.textoSecundario, 'Mensaje'),
-      };
+  static (IconData, Color, String) _estiloTipo(
+    String tipo, [
+    Map<String, dynamic> meta = const {},
+  ]) {
+    if (tipo == 'aviso') {
+      final contexto = '${meta['contexto'] ?? ''}'.trim().toLowerCase();
+      if (contexto == 'cita') {
+        return (
+          Icons.event_available_outlined,
+          AppTheme.moradoPrincipal,
+          'Citación',
+        );
+      }
+      if (contexto == 'pension') {
+        return (Icons.payments_outlined, AppTheme.moradoSecundario, 'Pensión');
+      }
+    }
+    return switch (tipo) {
+      'entrada' => (Icons.login_rounded, AppTheme.verdeEntrada, 'Entrada'),
+      'salida' => (Icons.logout_rounded, AppTheme.indigoSalida, 'Salida'),
+      'incidencia' => (
+          Icons.warning_amber_rounded,
+          AppTheme.ambarIncidencia,
+          'Incidencia',
+        ),
+      'aviso' => (Icons.campaign_outlined, AppTheme.moradoSecundario, 'Aviso'),
+      _ => (Icons.mail_outline, AppTheme.textoSecundario, 'Mensaje'),
+    };
+  }
 }
 
 class _DetalleMensajeSheet extends StatelessWidget {
@@ -577,13 +634,29 @@ class _DetalleMensajeSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final meta = mensaje.metadata;
+    final grado = [meta['grado'], meta['seccion']]
+        .where((v) => v != null && '$v'.trim().isNotEmpty)
+        .join(' ');
+    // El dato importante es el texto del mensaje; los metadatos van después y
+    // agrupados, para que no compitan con él.
     final extras = <String>[
-      if (mensaje.estudianteNombre != null) 'Hijo: ${mensaje.estudianteNombre}',
-      if (mensaje.colegio != null) 'Colegio: ${mensaje.colegio}',
-      if (meta['grado'] != null) 'Grado: ${meta['grado']}',
-      if (meta['seccion'] != null) 'Sección: ${meta['seccion']}',
-      if (meta['hora'] != null) 'Hora del evento: ${meta['hora']}',
+      if (mensaje.estudianteNombre != null)
+        [
+          mensaje.estudianteNombre,
+          if (grado.isNotEmpty) '($grado)',
+        ].join(' '),
+      if (mensaje.colegio != null) '${mensaje.colegio}',
+      if (meta['hora'] != null && meta['contexto'] != 'cita')
+        'Hora del evento: ${meta['hora']}',
       if (meta['falta'] != null) 'Falta: ${meta['falta']}',
+      if (meta['contexto'] == 'cita') ...[
+        if (meta['fecha'] != null) 'Fecha: ${_fechaCita(meta['fecha'])}',
+        if (meta['hora'] != null) 'Hora: ${meta['hora']}',
+        if (meta['motivo'] != null && '${meta['motivo']}'.trim().isNotEmpty)
+          'Motivo: ${meta['motivo']}',
+        if (meta['alcance'] != null && '${meta['alcance']}'.trim().isNotEmpty)
+          'Alcance: ${_alcanceCita('${meta['alcance']}')}',
+      ],
     ];
 
     return SafeArea(
@@ -605,7 +678,7 @@ class _DetalleMensajeSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              _FilaMensaje._estiloTipo(mensaje.tipo).$3,
+              _FilaMensaje._estiloTipo(mensaje.tipo, mensaje.metadata).$3,
               style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 color: AppTheme.texto,
@@ -620,22 +693,6 @@ class _DetalleMensajeSheet extends StatelessWidget {
                 fontSize: 13,
               ),
             ),
-            if (extras.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              ...extras.map(
-                (e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    e,
-                    style: const TextStyle(
-                      color: AppTheme.textoSecundario,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ],
             const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerLeft,
@@ -669,21 +726,26 @@ class _DetalleMensajeSheet extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              mensaje.leido
-                  ? 'Estado: leído'
-                  : mensaje.entregado
-                      ? 'Estado: entregado'
-                      : 'Estado: pendiente de lectura',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppTheme.textoSecundario,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+            if (extras.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              ...extras.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    e,
+                    style: const TextStyle(
+                      color: AppTheme.textoSecundario,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
+            ],
+            // No se muestra el estado de lectura: abrir el detalle ya lo marca
+            // como leído, así que decía «pendiente» mientras la lista de detrás
+            // decía «leído». Y al apoderado no le aporta nada.
+            const SizedBox(height: 12),
             Text(
               'Solo lectura — este canal no permite responder',
               textAlign: TextAlign.center,
@@ -697,3 +759,20 @@ class _DetalleMensajeSheet extends StatelessWidget {
     );
   }
 }
+
+String _fechaCita(Object crudo) {
+  final iso = '$crudo';
+  if (iso.length < 10) return iso;
+  final p = iso.substring(0, 10).split('-');
+  if (p.length != 3) return iso;
+  return '${p[2]}/${p[1]}/${p[0]}';
+}
+
+String _alcanceCita(String crudo) => switch (crudo.trim().toLowerCase()) {
+      'individual' => 'Individual',
+      'apafa' => 'APAFA',
+      'piso' => 'Piso',
+      'salon' => 'Salón',
+      _ => crudo,
+    };
+

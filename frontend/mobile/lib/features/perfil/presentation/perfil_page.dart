@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/di/injector.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/storage/local_db.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/util/formato.dart';
 import '../../../core/widgets/asiscole_logo.dart';
@@ -145,6 +146,42 @@ class _PerfilPageState extends State<PerfilPage> {
     await context.read<AuthCubit>().cerrarSesion();
   }
 
+  Future<void> _borrarMensajesGuardados() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Borrar los mensajes de este teléfono?'),
+        content: const Text(
+          'Se borrará la copia guardada en el dispositivo. Los mensajes se '
+          'volverán a descargar cuando tengas conexión.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Borrar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await sl<LocalDb>().vaciar();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mensajes guardados borrados.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudieron borrar los mensajes.')),
+      );
+    }
+  }
+
   Future<void> _eliminar() async {
     final doc = await showDialog<String>(
       context: context,
@@ -154,6 +191,7 @@ class _PerfilPageState extends State<PerfilPage> {
     try {
       await sl<PerfilRepository>().eliminarCuenta(doc);
       if (!mounted) return;
+      // `cerrarSesion` borra los tokens y la caché local de mensajes.
       await context.read<AuthCubit>().cerrarSesion();
     } catch (_) {
       if (!mounted) return;
@@ -406,6 +444,32 @@ class _PerfilPageState extends State<PerfilPage> {
                           ),
                           const Divider(height: 1),
                           ListTile(
+                            leading: const Icon(
+                              Icons.cleaning_services_outlined,
+                              color: AppTheme.moradoSecundario,
+                            ),
+                            title: const Text(
+                              'Borrar mensajes guardados en este teléfono',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.texto,
+                              ),
+                            ),
+                            subtitle: const Text(
+                              'Borra la copia local; no afecta al colegio',
+                              style: TextStyle(
+                                color: AppTheme.textoSecundario,
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: const Icon(
+                              Icons.chevron_right,
+                              color: AppTheme.moradoSecundario,
+                            ),
+                            onTap: _borrarMensajesGuardados,
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
                             leading: Icon(
                               Icons.delete_outline,
                               color: Theme.of(context).colorScheme.error,
@@ -512,15 +576,40 @@ class _ConfirmarDocumentoDialogState extends State<_ConfirmarDocumentoDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final error = Theme.of(context).colorScheme.error;
     return AlertDialog(
-      title: const Text('Eliminar cuenta'),
-      content: TextField(
-        controller: _ctrl,
-        decoration: const InputDecoration(
-          labelText: 'Documento del estudiante',
-          helperText: 'Confirma con el DNI/código de barras del estudiante',
+      title: const Text('Eliminar mi cuenta'),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Esta acción no se puede deshacer.',
+              style: TextStyle(fontWeight: FontWeight.w700, color: error),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Dejarás de recibir los avisos del colegio en este teléfono.\n'
+              'Se cerrará tu sesión y se borrarán los mensajes guardados.\n'
+              'Para volver a recibirlos tendrás que registrarte de nuevo.',
+              style: TextStyle(color: AppTheme.textoSecundario, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'El expediente del estudiante en el colegio no se modifica.',
+              style: TextStyle(color: AppTheme.textoSecundario, fontSize: 12),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _ctrl,
+              decoration: const InputDecoration(
+                labelText: 'Documento del estudiante',
+                helperText: 'Confirma con el DNI/código de barras del estudiante',
+              ),
+              keyboardType: TextInputType.number,
+            ),
+          ],
         ),
-        keyboardType: TextInputType.number,
       ),
       actions: [
         TextButton(
@@ -528,8 +617,9 @@ class _ConfirmarDocumentoDialogState extends State<_ConfirmarDocumentoDialog> {
           child: const Text('Cancelar'),
         ),
         FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: error),
           onPressed: () => Navigator.pop(context, _ctrl.text.trim()),
-          child: const Text('Eliminar'),
+          child: const Text('Eliminar mi cuenta'),
         ),
       ],
     );

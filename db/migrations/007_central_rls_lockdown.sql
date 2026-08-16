@@ -25,7 +25,9 @@ DECLARE
     'asis_feature_flag',
     'asis_auditoria',
     'asis_cursor_ingesta',
-    'asis_confirmacion_incidencia'
+    'asis_confirmacion_incidencia',
+    'asis_app_version',
+    'asis_nota'
   ];
 BEGIN
   FOREACH t IN ARRAY tablas LOOP
@@ -54,7 +56,9 @@ DECLARE
     'asis_feature_flag',
     'asis_auditoria',
     'asis_cursor_ingesta',
-    'asis_confirmacion_incidencia'
+    'asis_confirmacion_incidencia',
+    'asis_app_version',
+    'asis_nota'
   ];
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN

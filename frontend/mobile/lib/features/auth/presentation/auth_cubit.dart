@@ -10,6 +10,7 @@ import '../../../core/error/error_codes.dart';
 import '../../../core/session/eventos_sesion.dart';
 import '../../perfil/data/perfil_repository.dart';
 import '../data/auth_repository.dart';
+import '../domain/perfil.dart';
 import '../domain/solicitud_transferencia.dart';
 import 'auth_state.dart';
 
@@ -53,6 +54,15 @@ class AuthCubit extends Cubit<AuthState> {
       return;
     }
 
+    // Con perfil en el almacén no hay nada que esperar: se entra a la bandeja y
+    // el `data_token` se renueva por detrás. Si venía caducado, la primera
+    // petición recibe 401 y `AuthInterceptor` la reintenta con el token nuevo.
+    if (perfil != null) {
+      emit(OnlineSync(perfil));
+      unawaited(_refrescarAlArranqueEnSegundoPlano(perfil));
+      return;
+    }
+
     try {
       await _repositorio.refrescarDatosAlArranque();
     } on ApiError catch (e) {
@@ -62,17 +72,9 @@ class AuthCubit extends Cubit<AuthState> {
         emit(Unauthenticated(codigoError: e.codigo, mensaje: e.mensaje));
         return;
       }
-      // Fallo de red u otro: si hay perfil cacheado, seguimos en modo offline
-      // real (API falló), no por el sensor de conectividad del teléfono.
-      if (perfil != null) {
-        emit(OfflineMessagesOnly(perfil));
-        return;
-      }
     } catch (_) {
-      if (perfil != null) {
-        emit(OfflineMessagesOnly(perfil));
-        return;
-      }
+      // Sin perfil cacheado no hay nada que mostrar: se sigue al bloque de
+      // abajo, que lo pide al backend y decide si la sesión sirve.
     }
 
     if (perfil == null) {
@@ -97,6 +99,33 @@ class AuthCubit extends Cubit<AuthState> {
     }
 
     emit(OnlineSync(perfil));
+    unawaited(_repositorio.renovarSesionSiCorresponde());
+  }
+
+  /// Renueva el `data_token` sin bloquear el arranque.
+  ///
+  /// Solo cambia de estado si la sesión resultó inservible: expirada (vuelve al
+  /// login) o inalcanzable (modo offline con la caché de mensajes).
+  Future<void> _refrescarAlArranqueEnSegundoPlano(Perfil perfil) async {
+    try {
+      await _repositorio.refrescarDatosAlArranque();
+    } on ApiError catch (e) {
+      if (isClosed) return;
+      if (e.codigo == CodigosError.sesionExpirada ||
+          e.codigo == CodigosError.noAutenticado) {
+        await _repositorio.limpiarSesionLocal();
+        if (isClosed) return;
+        emit(Unauthenticated(codigoError: e.codigo, mensaje: e.mensaje));
+        return;
+      }
+      // Fallo de red: offline real (lo dijo la API), no el sensor del teléfono.
+      emit(OfflineMessagesOnly(perfil));
+      return;
+    } catch (_) {
+      if (isClosed) return;
+      emit(OfflineMessagesOnly(perfil));
+      return;
+    }
     unawaited(_repositorio.renovarSesionSiCorresponde());
   }
 
@@ -170,19 +199,46 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// Tope de sondeos: el TTL de la solicitud partido por el intervalo, con un
+  /// ciclo de gracia. Sin este tope, una app dejada en esa pantalla seguía
+  /// pidiendo al servidor indefinidamente.
+  static final int _maxSondeosTransferencia =
+      Env.ttlTransferencia.inSeconds ~/ Env.intervaloSondeoTransferencia.inSeconds
+          + 1;
+
+  int _sondeosTransferencia = 0;
+
   /// Sondea `GET /auth/session-transfer/{id}` mientras se espera la respuesta
   /// del dispositivo activo.
   void iniciarSondeoTransferencia() {
     _sondeoTransferencia?.cancel();
+    _sondeosTransferencia = 0;
     _sondeoTransferencia = Timer.periodic(
       Env.intervaloSondeoTransferencia,
-      (_) => consultarTransferencia(),
+      (_) {
+        if (++_sondeosTransferencia > _maxSondeosTransferencia) {
+          detenerSondeoTransferencia();
+          if (state is AwaitingTransferApproval) {
+            emit(
+              Unauthenticated(
+                codigoError: CodigosError.transferenciaExpirada,
+                mensaje: CodigosError.mensajePorDefecto(
+                  CodigosError.transferenciaExpirada,
+                ),
+              ),
+            );
+          }
+          return;
+        }
+        consultarTransferencia();
+      },
     );
   }
 
   void detenerSondeoTransferencia() {
     _sondeoTransferencia?.cancel();
     _sondeoTransferencia = null;
+    _sondeosTransferencia = 0;
   }
 
   Future<void> consultarTransferencia() async {

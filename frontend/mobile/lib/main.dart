@@ -9,6 +9,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 
 import 'app.dart';
 import 'core/config/env.dart';
+import 'core/crash/crashlytics_canal.dart';
 import 'core/di/injector.dart';
 import 'core/push/firebase_init.dart';
 import 'core/push/servicio_push.dart';
@@ -44,12 +45,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage mensaje) async {
     'salida' => 'Hay un nuevo aviso de salida',
     'incidencia' => 'Hay una nueva incidencia',
     'aviso' => 'Tienes un nuevo aviso del colegio',
+    'nota' => 'Hay una nueva nota',
     _ => 'Tienes un nuevo mensaje',
   };
 
   await locales.show(
     id: mensaje.hashCode,
-    title: 'Asiscole Messenger',
+    title: Env.nombreApp,
     body: cuerpo,
     notificationDetails: const NotificationDetails(
       android: AndroidNotificationDetails(
@@ -80,6 +82,7 @@ Future<void> main() async {
 
   // Firebase antes del handler de background para evitar carrera duplicate-app.
   await asegurarFirebaseApp();
+  await CrashlyticsCanal.enganchar();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   await configurarInyector();

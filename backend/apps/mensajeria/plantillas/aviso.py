@@ -6,11 +6,12 @@ from apps.mensajeria.plantillas.base import ContextoEvento, PlantillaBase
 
 
 class PlantillaAviso(PlantillaBase):
-    """Comunicado que la administracion del colegio envia a varios apoderados.
+    """Comunicado institucional: pensión, cita o texto libre.
 
-    El cuerpo lo escribe una persona, asi que la plantilla solo lo encabeza y lo
-    limpia. No nace de un evento del outbox: su `origen_evento` es `NULL` y por
-    eso un mismo texto puede enviarse mas de una vez.
+    El cuerpo lo escribe una persona (o el SIE en `texto_libre`), y la plantilla
+    solo lo encabeza según `payload.contexto` (`cita`, `pension` o genérico).
+    Los avisos del administrador pueden repetirse (`origen_evento` nulo). Los
+    que vienen de ingesta deduplican con `aviso:{id_registro}`.
     """
 
     tipo = "aviso"
@@ -20,5 +21,19 @@ class PlantillaAviso(PlantillaBase):
         ctx.exigir("texto_libre")
 
         cuerpo = " ".join((ctx.texto_libre or "").split())
-        encabezado = f"Comunicado de {ctx.colegio}" if ctx.colegio else "Comunicado del colegio"
+        contexto = (ctx.contexto or "").strip().lower()
+        if contexto == "cita":
+            encabezado = (
+                f"Citación de {ctx.colegio}" if ctx.colegio else "Citación del colegio"
+            )
+        elif contexto == "pension":
+            encabezado = (
+                f"Aviso de pensión de {ctx.colegio}"
+                if ctx.colegio
+                else "Aviso de pensión"
+            )
+        else:
+            encabezado = (
+                f"Comunicado de {ctx.colegio}" if ctx.colegio else "Comunicado del colegio"
+            )
         return f"{encabezado}: {cuerpo}"

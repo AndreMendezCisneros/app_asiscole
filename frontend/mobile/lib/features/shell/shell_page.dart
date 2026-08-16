@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/feature_flags.dart';
+import '../../core/di/injector.dart';
 import '../../core/theme/app_theme.dart';
 import '../auth/presentation/auth_cubit.dart';
 import '../auth/presentation/auth_state.dart';
@@ -10,10 +12,18 @@ import '../auth/presentation/auth_state.dart';
 ///
 /// Offline (`OfflineMessagesOnly`): solo la pestaña Mensajes es usable;
 /// el resto queda deshabilitado (regla de producto: solo caché de mensajes).
-class ShellPage extends StatelessWidget {
+class ShellPage extends StatefulWidget {
   const ShellPage({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
+
+  @override
+  State<ShellPage> createState() => _ShellPageState();
+}
+
+class _ShellPageState extends State<ShellPage> {
+  /// Rama del router que ocupa Notas; se oculta si el flag está apagado.
+  static const int _ramaNotas = 3;
 
   static const _destinos = <_DestinoNav>[
     _DestinoNav(
@@ -58,7 +68,24 @@ class ShellPage extends StatelessWidget {
   );
 
   @override
+  void initState() {
+    super.initState();
+    // Sin await: la bandeja no espera por los flags.
+    sl<FeatureFlags>().refrescar();
+  }
+
+  void _avisarQueFaltaConexion(BuildContext context, String etiqueta) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Necesitas conexión para ver ${etiqueta.toLowerCase()}.'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final navigationShell = widget.navigationShell;
     final indice = navigationShell.currentIndex;
     return BlocBuilder<AuthCubit, AuthState>(
       buildWhen: (prev, next) =>
@@ -116,21 +143,46 @@ class ShellPage extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
               decoration: _decoNav,
-              child: Row(
-                children: [
-                  for (var i = 0; i < _destinos.length; i++)
-                    Expanded(
-                      child: _ItemNav(
-                        destino: _destinos[i],
-                        activo: i == indice,
-                        habilitado: !soloMensajes || i == 0,
-                        onTap: () {
-                          if (soloMensajes && i != 0) return;
-                          navigationShell.goBranch(i);
-                        },
-                      ),
-                    ),
-                ],
+              child: ValueListenableBuilder<bool>(
+                valueListenable: sl<FeatureFlags>().notas,
+                builder: (context, notasActivas, _) {
+                  if (!notasActivas && indice == _ramaNotas) {
+                    // Se llegó por deep link y luego el flag quedó apagado.
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      navigationShell.goBranch(0);
+                    });
+                  }
+                  final ramas = <int>[
+                    for (var i = 0; i < _destinos.length; i++)
+                      if (i != _ramaNotas || notasActivas) i,
+                  ];
+                  // Con cinco pestañas la etiqueta más larga solo cabe a 10 px;
+                  // con cuatro se puede respetar el mínimo legible.
+                  final tamanoEtiqueta = ramas.length > 4 ? 10.0 : 11.5;
+                  return Row(
+                    children: [
+                      for (final rama in ramas)
+                        Expanded(
+                          child: _ItemNav(
+                            destino: _destinos[rama],
+                            activo: rama == indice,
+                            habilitado: !soloMensajes || rama == 0,
+                            tamanoEtiqueta: tamanoEtiqueta,
+                            onTap: () {
+                              if (soloMensajes && rama != 0) {
+                                _avisarQueFaltaConexion(
+                                  context,
+                                  _destinos[rama].etiqueta,
+                                );
+                                return;
+                              }
+                              navigationShell.goBranch(rama);
+                            },
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -158,11 +210,16 @@ class _ItemNav extends StatelessWidget {
     required this.activo,
     required this.onTap,
     this.habilitado = true,
+    this.tamanoEtiqueta = 11.5,
   });
 
   final _DestinoNav destino;
   final bool activo;
+
+  /// Solo afecta al color: el toque siempre responde, aunque sea para explicar
+  /// que hace falta conexión. Un botón mudo se lee como app trabada.
   final bool habilitado;
+  final double tamanoEtiqueta;
   final VoidCallback onTap;
 
   @override
@@ -175,7 +232,7 @@ class _ItemNav extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: habilitado ? onTap : null,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
@@ -201,7 +258,7 @@ class _ItemNav extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: tamanoEtiqueta,
                   fontWeight: activo ? FontWeight.w700 : FontWeight.w500,
                   color: color,
                 ),

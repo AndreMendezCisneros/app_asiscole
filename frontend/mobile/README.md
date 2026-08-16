@@ -1,4 +1,4 @@
-# Asiscole Messenger — app del apoderado
+# Asis Messenger — app del apoderado
 
 Canal móvil que reemplaza a WhatsApp para avisar al apoderado de entradas, salidas,
 incidencias y avisos. El apoderado es **solo receptor**.
@@ -65,7 +65,7 @@ SIE Jean Piaget (nube)
   → Django en el VPS crea el aviso en la BD central del canal
   → push FCM (si hay token) + bandeja en la app
 
-App Asiscole Messenger (APK)
+App Asis Messenger (APK)
   → HTTPS https://jeanpiaget.asiscole.com/canal-api/v0.1/...
   → login, mensajes, asistencias, incidencias, perfil
 ```
@@ -108,7 +108,7 @@ cd frontend/mobile
 | Celular + Django local | `.\run_dispositivo.ps1 -Local` |
 | Emulador + Django local | `--dart-define=API_BASE_URL=http://10.0.2.2:8000/v0.1` |
 
-## Generar APK (Asiscole Messenger)
+## Generar APK (Asis Messenger)
 
 Desde la raíz del repo (recomendado; también consulta health del VPS):
 
@@ -132,7 +132,7 @@ release se firma con la clave de debug (solo pruebas / sideload).
 
 Artefacto:
 
-`build/app/outputs/flutter-apk/Asiscole_Messenger.apk`
+`build/app/outputs/flutter-apk/Asis_Messenger.apk`
 
 Estado de producción, cutover y por qué un APK viejo podía mostrar “sin
 conexión”: [`docs/estado-produccion.md`](../../docs/estado-produccion.md).
@@ -141,7 +141,7 @@ Tras rotar `DJANGO_SECRET_KEY` en el VPS, hay que **borrar datos de la app** e
 iniciar sesión de nuevo (las sesiones JWT quedan inválidas).
 
 Flutter también genera `app-release.apk` (mismo contenido); es el nombre interno
-de Gradle. El nombre visible en el dispositivo (launcher) es **Asiscole Messenger**.
+de Gradle. El nombre visible en el dispositivo (launcher) es **Asis Messenger**.
 
 ## Navegación (RF-K)
 

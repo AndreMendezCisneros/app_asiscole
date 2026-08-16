@@ -86,6 +86,9 @@ class ContextoEvento:
 
     # Aviso y personalizado
     texto_libre: str | None = None
+    contexto: str | None = None
+    motivo: str | None = None
+    alcance: str | None = None
 
     id_registro: int | None = None
     extra: dict = field(default_factory=dict)
@@ -150,6 +153,9 @@ class ContextoEvento:
             "es_grave": self.es_grave if self.tipo == "incidencia" else None,
             "nivel_reincidencia": self.nivel_reincidencia,
             "id_registro": self.id_registro,
+            "contexto": self.contexto,
+            "motivo": self.motivo,
+            "alcance": self.alcance,
         }
         datos.update({clave: valor for clave, valor in opcionales.items() if valor is not None})
         return datos
@@ -210,6 +216,9 @@ class ContextoEvento:
             "fecha_hora_registro",
             "texto_libre",
             "nota",
+            "contexto",
+            "motivo",
+            "alcance",
         }
 
         id_estudiante = datos.get("id_estudiante")
@@ -236,6 +245,9 @@ class ContextoEvento:
             texto_libre=(
                 str(datos.get("texto_libre") or datos.get("nota") or "").strip() or None
             ),
+            contexto=(str(datos.get("contexto") or "").strip().lower() or None),
+            motivo=(str(datos.get("motivo") or "").strip() or None),
+            alcance=(str(datos.get("alcance") or "").strip().lower() or None),
             id_registro=id_registro,
             extra={clave: valor for clave, valor in datos.items() if clave not in conocidos},
         )

@@ -111,47 +111,22 @@ class FechasLima {
   }
 }
 
+/// Zona explícita al final de un ISO-8601: `Z`, `+05:00`, `-0500`.
+final RegExp _zonaExplicita = RegExp(r'(?:Z|[+-]\d{2}:?\d{2})$', caseSensitive: false);
+
 /// Interpreta `emitido_en` del API como instante absoluto.
 ///
-/// Si viene sin zona (naive), se asume UTC: el canal / Supabase a veces emite
-/// el reloj UTC sin sufijo `Z`, y Dart lo trataría como hora local (+5 h en PE).
+/// El canal siempre emite UTC con sufijo `Z` (`_emitido_iso` en el backend), así
+/// que basta con respetar la zona que venga en el texto. Sin zona (naive) se
+/// asume UTC: Dart lo tomaría como hora local del teléfono, que en Perú
+/// adelantaría el mensaje cinco horas.
 ///
-/// VPS legacy a veces etiqueta el reloj UTC con offset Lima
-/// (`18:47:52-05:00` en vez de `18:47:52Z` / `13:47:52-05:00`). Eso deja el
-/// instante ~5 h en el futuro; en ese caso se reinterpreta el civil como UTC.
+/// A propósito no hay heurística que compare con el reloj del dispositivo: haría
+/// que el mismo `emitido_en` se mostrara distinto según cuándo se lea.
 DateTime parseInstanteApi(String crudo) {
-  final dt = DateTime.parse(crudo);
-  final absoluto = dt.toUtc();
-  final ahora = DateTime.now().toUtc();
-  if (absoluto.difference(ahora) > const Duration(hours: 2)) {
-    final m = RegExp(
-      r'^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(\.\d+)?',
-    ).firstMatch(crudo.trim());
-    if (m != null) {
-      final frac = m.group(7);
-      var ms = 0;
-      var us = 0;
-      if (frac != null && frac.length > 1) {
-        final digits = (frac.substring(1) + '000000').substring(0, 6);
-        ms = int.parse(digits.substring(0, 3));
-        us = int.parse(digits.substring(3, 6));
-      }
-      final comoUtc = DateTime.utc(
-        int.parse(m.group(1)!),
-        int.parse(m.group(2)!),
-        int.parse(m.group(3)!),
-        int.parse(m.group(4)!),
-        int.parse(m.group(5)!),
-        int.parse(m.group(6)!),
-        ms,
-        us,
-      );
-      if (comoUtc.difference(ahora).abs() < absoluto.difference(ahora).abs()) {
-        return comoUtc;
-      }
-    }
-  }
-  if (dt.isUtc) return absoluto;
+  final texto = crudo.trim();
+  final dt = DateTime.parse(texto);
+  if (_zonaExplicita.hasMatch(texto)) return dt.toUtc();
   return DateTime.utc(
     dt.year,
     dt.month,

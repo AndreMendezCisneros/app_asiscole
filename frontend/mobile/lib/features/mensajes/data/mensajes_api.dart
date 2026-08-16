@@ -16,8 +16,8 @@ class MensajesApi {
     final resp = await _dio.get<Map<String, dynamic>>(
       '/mensajes',
       queryParameters: {
-        if (since != null) 'since': since,
-        if (cursor != null) 'cursor': cursor,
+        'since': ?since,
+        'cursor': ?cursor,
         'limit': limit,
       },
     );

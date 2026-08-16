@@ -10,6 +10,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.administracion import services
+from apps.common.permissions import PermitirSinToken
+from apps.common.red import ip_de
+from apps.cuentas import rate_limit
 from apps.cuentas.authentication import DataTokenAuthentication
 from apps.cuentas.permissions import EsAdministrador
 
@@ -48,6 +51,60 @@ class FeatureFlagsView(APIView):
     @extend_schema(tags=["sistema"])
     def get(self, request: Request) -> Response:
         return Response(services.listar_flags())
+
+
+class VersionAppView(APIView):
+    """`GET /sistema/version-app`: politica de versiones (Fase 7).
+
+    Sin autenticacion: la app la consulta antes de tener sesion, y una version
+    con un fallo grave debe poder cortarse aunque el login este roto.
+    """
+
+    authentication_classes: list = []
+    permission_classes = [PermitirSinToken]
+
+    #: Consultas por IP y hora. Generoso: la app pregunta una vez por arranque.
+    MAX_POR_IP = 60
+    VENTANA_SEGUNDOS = 3600
+
+    @extend_schema(
+        tags=["sistema"],
+        parameters=[
+            OpenApiParameter("plataforma", str, required=True),
+            OpenApiParameter(
+                "X-App-Version",
+                int,
+                OpenApiParameter.HEADER,
+                required=False,
+                description="versionCode instalado.",
+            ),
+        ],
+    )
+    def get(self, request: Request) -> Response:
+        rate_limit.verificar_publico_por_ip(
+            "version_app",
+            ip_de(request),
+            maximo=self.MAX_POR_IP,
+            ventana=self.VENTANA_SEGUNDOS,
+        )
+        return Response(
+            services.politica_version_app(
+                request.query_params.get("plataforma", ""),
+                _version_instalada(request),
+            )
+        )
+
+
+def _version_instalada(request: Request) -> int | None:
+    """Lee `X-App-Version`. Una cabecera ilegible se trata como ausente."""
+    crudo = request.headers.get("X-App-Version")
+    if not crudo:
+        return None
+    try:
+        version = int(str(crudo).strip())
+    except (TypeError, ValueError):
+        return None
+    return version if version > 0 else None
 
 
 class ApoderadosAdminView(APIView):

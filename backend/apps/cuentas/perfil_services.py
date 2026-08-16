@@ -22,6 +22,7 @@ from apps.cuentas.models import (
 from apps.cuentas.services import construir_perfil
 from apps.directorio import services as directorio_svc
 from apps.directorio.models import VINCULO_ACTIVO, Directorio
+from apps.mensajeria import services as mensajeria_svc
 
 logger = logging.getLogger("asiscole.cuentas.perfil")
 
@@ -148,6 +149,9 @@ def eliminar_cuenta(apoderado: Apoderado, documento_estudiante: str) -> None:
     )
     PushToken.objects.filter(apoderado=apoderado).update(activo=False)
     Directorio.objects.filter(telefono=apoderado.telefono).update(estado_vinculo="inactivo")
+    # El texto y la metadata llevan el nombre del estudiante: se anonimizan ya, sin
+    # esperar la purga por retencion. El expediente del colegio no se toca.
+    mensajes_anonimizados = mensajeria_svc.anonimizar_mensajes_de(apoderado)
 
     apoderado.telefono = f"deleted:{uuid.uuid4()}"
     apoderado.nombre_alias = None
@@ -161,6 +165,12 @@ def eliminar_cuenta(apoderado: Apoderado, documento_estudiante: str) -> None:
         apoderado=apoderado,
         actor=f"apoderado:{apoderado.pk}",
         accion="cuenta_eliminada",
-        detalle={},
+        detalle={"mensajes_anonimizados": mensajes_anonimizados},
     )
-    logger.info("cuenta_eliminada", extra={"apoderado_id": apoderado.pk})
+    logger.info(
+        "cuenta_eliminada",
+        extra={
+            "apoderado_id": apoderado.pk,
+            "mensajes_anonimizados": mensajes_anonimizados,
+        },
+    )

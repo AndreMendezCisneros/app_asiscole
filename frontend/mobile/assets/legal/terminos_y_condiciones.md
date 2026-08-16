@@ -1,13 +1,13 @@
 # Términos y condiciones y política de privacidad
 
 **Versión:** 2026-07-28  
-**Aplicación:** Asiscole Messenger (canal de avisos para apoderados)
+**Aplicación:** Asis Messenger (canal de avisos para apoderados)
 
-Este documento describe el tratamiento de datos personales en el canal móvil Asiscole Messenger. Al marcar la casilla de aceptación e ingresar, el apoderado declara haber leído y aceptado estos términos.
+Este documento describe el tratamiento de datos personales en el canal móvil Asis Messenger. Al marcar la casilla de aceptación e ingresar, el apoderado declara haber leído y aceptado estos términos.
 
 ## 1. Quiénes somos
 
-Asiscole Messenger es el canal oficial del colegio para informar al apoderado sobre entradas, salidas, incidencias y avisos escolares. Reemplaza el uso informal de mensajería instantánea para estos avisos.
+Asis Messenger es el canal oficial del colegio para informar al apoderado sobre entradas, salidas, incidencias y avisos escolares. Reemplaza el uso informal de mensajería instantánea para estos avisos.
 
 ## 2. Qué datos se tratan
 

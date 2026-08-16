@@ -12,12 +12,23 @@ plugins {
 val googleServicesJson = file("google-services.json")
 if (googleServicesJson.exists()) {
     apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+// La clave de debug del SDK es pública: firmar un release con ella permitiría a
+// cualquiera publicar una "actualización" de esta app. Se corta el build antes.
+val pideRelease = gradle.startParameter.taskNames.any { it.contains("elease") }
+if (pideRelease && !keystorePropertiesFile.exists()) {
+    throw GradleException(
+        "Falta android/key.properties: no se puede firmar el release. " +
+            "Copia key.properties.example y apúntalo al keystore de release.",
+    )
 }
 
 android {
@@ -58,11 +69,12 @@ android {
 
     buildTypes {
         release {
-            // Si existe key.properties → firma release; si no, debug (solo local).
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
-                signingConfigs.getByName("debug")
+                // Sin keystore no se firma: el guard de arriba ya cortó el build
+                // si la tarea era de release; esto evita el fallback a debug.
+                null
             }
             isMinifyEnabled = true
             isShrinkResources = true

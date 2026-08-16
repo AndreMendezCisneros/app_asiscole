@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Configuración de entorno de la app.
 ///
 /// Por defecto apunta al VPS de producción (también en debug), porque las
@@ -39,13 +37,33 @@ class Env {
     return esProduccion ? _produccion : _desarrollo;
   }
 
-  static const Duration timeoutConexion = Duration(seconds: 20);
-  static const Duration timeoutRespuesta = Duration(seconds: 30);
+  /// Con 20 s/30 s el apoderado se quedaba medio minuto mirando un spinner antes
+  /// de que la app pudiera decirle que no había red. El backend responde en
+  /// milisegundos incluso bajo carga, así que esperar más no aporta nada.
+  static const Duration timeoutConexion = Duration(seconds: 10);
+  static const Duration timeoutRespuesta = Duration(seconds: 15);
 
   /// Zona horaria del colegio. Todas las fechas se muestran en esta zona.
   static const String zonaHoraria = 'America/Lima';
 
   static const String locale = 'es_PE';
+
+  /// Nombre visible en el launcher, la barra y las notificaciones.
+  static const String nombreApp = 'Asis Messenger';
+
+  /// Soporte del canal. Antes de iniciar sesión la app no sabe de qué colegio es
+  /// el apoderado, así que el contacto es único y desde ahí se deriva al colegio.
+  static const String correoSoporte = 'soporte@asiscole.com';
+
+  /// Página pública con el procedimiento de eliminación de cuenta (Play la exige
+  /// además del botón en Perfil).
+  static const String urlEliminarCuenta =
+      'https://jeanpiaget.asiscole.com/canal-api/eliminar-cuenta';
+
+  /// Ficha de Play. `in_app_update` no funciona en APK de sideload; el botón
+  /// de actualizar cae aquí.
+  static const String urlFichaPlay =
+      'https://play.google.com/store/apps/details?id=pe.asiscole.asiscole_app';
 
   /// TTL de una solicitud de transferencia de sesión (contrato: 5 minutos).
   static const Duration ttlTransferencia = Duration(minutes: 5);

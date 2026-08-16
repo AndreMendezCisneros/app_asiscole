@@ -1,7 +1,10 @@
-"""Consultas de asistencia e incidencias contra la BD del colegio (solo lectura).
+"""Consultas de asistencia, incidencias y notas.
 
+Asistencias e incidencias se leen de la BD del colegio (solo lectura).
 Las confirmaciones de incidencia viven en la BD central
 (`asis_confirmacion_incidencia`) y se fusionan al listar/detallar.
+Las notas semanales viven en la BD central (`asis_nota`) porque el SIE las
+empuja por ingesta; no se consultan en vivo al colegio.
 """
 
 from __future__ import annotations
@@ -244,3 +247,19 @@ def confirmar_incidencia(
         id_incidencia_colegio=incidencia_id,
         defaults={"confirmada_en": timezone.now()},
     )
+
+
+def listar_notas(apoderado: Apoderado, *, estudiante_id: int) -> dict:
+    """Notas ingeridas del estudiante en el colegio del vínculo activo.
+
+    No consulta la BD del colegio: las filas salen de `asis_nota`.
+    """
+    from apps.mensajeria.models import NotaSemanal
+    from apps.mensajeria.notas import serializar_nota
+
+    vinculo = vinculo_estudiante(apoderado, estudiante_id)
+    filas = NotaSemanal.objects.filter(
+        tenant_id=vinculo.tenant_id,
+        id_estudiante=estudiante_id,
+    ).order_by("-fecha_inicio", "-semana_codigo", "-emitido_en")
+    return {"items": [serializar_nota(f) for f in filas]}

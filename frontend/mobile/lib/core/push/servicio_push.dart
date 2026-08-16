@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../config/env.dart';
 import 'firebase_init.dart';
 
 /// Notificaciones push. Payload mínimo del backend: tipo, message_id, destino.
@@ -31,6 +32,8 @@ class ServicioPush {
       StreamController<String>.broadcast();
   final StreamController<void> _avisosMensaje =
       StreamController<void>.broadcast();
+  final StreamController<void> _avisosNota =
+      StreamController<void>.broadcast();
   final StreamController<String> _tokensActualizados =
       StreamController<String>.broadcast();
 
@@ -47,6 +50,9 @@ class ServicioPush {
 
   /// Se emite cuando llega un push de mensaje (hay que refrescar la bandeja).
   Stream<void> get avisosDeMensaje => _avisosMensaje.stream;
+
+  /// Se emite cuando llega un push de nota (hay que refrescar la sección).
+  Stream<void> get avisosDeNota => _avisosNota.stream;
 
   /// Nuevo token FCM/APNs (login o rotación).
   Stream<String> get tokensActualizados => _tokensActualizados.stream;
@@ -156,7 +162,7 @@ class ServicioPush {
     final aviso = mensaje.notification;
 
     // FCM del canal es solo `data` (sin texto personal). Mostramos aviso genérico.
-    final titulo = aviso?.title ?? 'Asiscole Messenger';
+    final titulo = aviso?.title ?? Env.nombreApp;
     final cuerpo = aviso?.body ?? _textoGenerico(tipo);
 
     unawaited(_mostrarEnBandeja(
@@ -166,10 +172,7 @@ class ServicioPush {
       payload: destino,
     ));
 
-    if (destino != null && destino.startsWith('mensajes/')) {
-      _avisosMensaje.add(null);
-    }
-    if (destino != null) _procesarDestino(destino);
+    _avisarDestino(destino);
   }
 
   Future<void> _mostrarEnBandeja({
@@ -207,11 +210,18 @@ class ServicioPush {
   }
 
   void _alAbrir(RemoteMessage mensaje) {
-    final destino = _destinoDe(mensaje);
-    if (destino != null && destino.startsWith('mensajes/')) {
+    _avisarDestino(_destinoDe(mensaje));
+  }
+
+  void _avisarDestino(String? destino) {
+    if (destino == null) return;
+    if (destino.startsWith('mensajes/')) {
       _avisosMensaje.add(null);
     }
-    if (destino != null) _procesarDestino(destino);
+    if (destino.startsWith('notas/')) {
+      _avisosNota.add(null);
+    }
+    _procesarDestino(destino);
   }
 
   String _textoGenerico(String tipo) => switch (tipo) {
@@ -219,6 +229,7 @@ class ServicioPush {
         'salida' => 'Hay un nuevo aviso de salida',
         'incidencia' => 'Hay una nueva incidencia',
         'aviso' => 'Tienes un nuevo aviso del colegio',
+        'nota' => 'Hay una nueva nota',
         tipoSolicitudTransferencia => 'Solicitud de acceso en otro dispositivo',
         _ => 'Tienes un nuevo mensaje',
       };
@@ -249,6 +260,7 @@ class ServicioPush {
     await _transferencias.close();
     await _destinos.close();
     await _avisosMensaje.close();
+    await _avisosNota.close();
     await _tokensActualizados.close();
   }
 }

@@ -6,7 +6,7 @@ import logging
 
 from django.db.models import Q
 
-from apps.administracion.models import FeatureFlag
+from apps.administracion.models import FeatureFlag, VersionApp
 from apps.common.errors import RoleNotAllowed, ValidationError
 from apps.cuentas.models import (
     CUENTA_ACTIVA,
@@ -55,6 +55,46 @@ def listar_flags() -> dict[str, bool]:
     FeatureFlag.objects.get_or_create(clave="notas", defaults={"activo": False})
     FeatureFlag.objects.get_or_create(clave="citacion", defaults={"activo": False})
     return {f.clave: f.activo for f in FeatureFlag.objects.all()}
+
+
+PLATAFORMAS_VERSION = frozenset({"android", "ios"})
+
+
+def politica_version_app(plataforma: str, version_instalada: int | None) -> dict:
+    """Resuelve si la version instalada sigue siendo aceptable.
+
+    El calculo lo hace el servidor y el cliente solo obedece: si la comparacion
+    viviera en la app, arreglar un criterio mal puesto exigiria otra publicacion.
+
+    Args:
+        plataforma: `android` o `ios`.
+        version_instalada: `versionCode` de la cabecera `X-App-Version`. Si no
+            llega, no se bloquea a nadie: puede ser un cliente antiguo o una
+            cabecera perdida por un proxy.
+
+    Returns:
+        El cuerpo de `GET /sistema/version-app` (esquema `VersionApp`).
+
+    Raises:
+        ValidationError: Si la plataforma no es una de las soportadas.
+    """
+    plataforma = (plataforma or "").strip().lower()
+    if plataforma not in PLATAFORMAS_VERSION:
+        raise ValidationError("La plataforma debe ser android o ios.")
+
+    fila, _ = VersionApp.objects.get_or_create(plataforma=plataforma)
+
+    obligatoria = version_instalada is not None and version_instalada < fila.min_soportada
+    disponible = version_instalada is not None and version_instalada < fila.ultima_disponible
+    return {
+        "plataforma": plataforma,
+        "min_soportada": fila.min_soportada,
+        "ultima_disponible": fila.ultima_disponible,
+        "actualizacion_obligatoria": obligatoria,
+        "actualizacion_disponible": disponible,
+        "mensaje": fila.mensaje or None,
+        "url_tienda": fila.url_tienda or None,
+    }
 
 
 def listar_apoderados(

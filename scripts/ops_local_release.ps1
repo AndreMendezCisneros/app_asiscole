@@ -25,7 +25,7 @@ Set-Location (Join-Path $repo "frontend\mobile")
 & ".\tool\build_apk.ps1"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$apk = Join-Path $repo "frontend\mobile\build\app\outputs\flutter-apk\Asiscole_Messenger.apk"
+$apk = Join-Path $repo "frontend\mobile\build\app\outputs\flutter-apk\Asis_Messenger.apk"
 Write-Host ""
 Write-Host "APK listo:" $apk
 Write-Host ""

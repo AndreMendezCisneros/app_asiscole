@@ -15,6 +15,7 @@ class ApiClient {
     required RefrescarDatos refrescar,
     void Function(ApiError motivo)? alInvalidarSesion,
     String? baseUrl,
+    String versionCode = '',
     Dio? dio,
   }) {
     _dio = dio ??
@@ -28,6 +29,10 @@ class ApiClient {
             responseType: ResponseType.json,
           ),
         );
+
+    if (versionCode.isNotEmpty) {
+      _dio.interceptors.add(_CabeceraVersion(versionCode));
+    }
 
     _dio.interceptors.add(
       AuthInterceptor(
@@ -48,6 +53,20 @@ class ApiClient {
   late final Dio _dio;
 
   Dio get dio => _dio;
+}
+
+/// El servidor decide si hay que actualizar comparando este entero con
+/// `min_soportada`. Va en todas las peticiones, no solo en `/sistema/version-app`.
+class _CabeceraVersion extends Interceptor {
+  _CabeceraVersion(this._versionCode);
+
+  final String _versionCode;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    options.headers['X-App-Version'] = _versionCode;
+    handler.next(options);
+  }
 }
 
 /// Traza mínima para depurar. Nunca registra cuerpos, teléfonos, documentos ni
@@ -84,7 +103,8 @@ class _MedicionBytesDebug extends Interceptor {
   int _tamano(dynamic data) {
     if (data == null) return 0;
     if (data is List<int>) return data.length;
-    return data.toString().length;
+    if (data is String) return data.length;
+    return 0;
   }
 
   @override

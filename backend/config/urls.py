@@ -11,6 +11,8 @@ from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from apps.common import paginas
+
 
 def health(request: HttpRequest) -> JsonResponse:
     """Sonda de vida del proceso web.
@@ -37,6 +39,9 @@ def health(request: HttpRequest) -> JsonResponse:
 
 urlpatterns = [
     path("health", health, name="health"),
+    # Pagina publica: Play exige una URL web para pedir la eliminacion de cuenta,
+    # ademas del boton dentro de la app. No recibe ni muestra datos personales.
+    path("eliminar-cuenta", paginas.eliminar_cuenta, name="eliminar-cuenta"),
     path("v0.1/", include("apps.cuentas.urls")),
     path("v0.1/", include("apps.directorio.urls")),
     path("v0.1/", include("apps.mensajeria.urls")),

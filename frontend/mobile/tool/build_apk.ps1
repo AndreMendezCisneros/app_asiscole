@@ -1,4 +1,4 @@
-# Genera el APK release y lo publica como Asiscole_Messenger.apk
+# Genera el APK release y lo publica como Asis_Messenger.apk
 # Uso (desde frontend/mobile):
 #   .\tool\build_apk.ps1
 #
@@ -22,7 +22,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $outDir = Join-Path $root "build\app\outputs\flutter-apk"
 $src = Join-Path $outDir "app-release.apk"
-$dst = Join-Path $outDir "Asiscole_Messenger.apk"
+$dst = Join-Path $outDir "Asis_Messenger.apk"
 
 if (-not (Test-Path $src)) {
     Write-Error "No se generó app-release.apk"

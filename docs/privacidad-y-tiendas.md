@@ -38,8 +38,14 @@ Los mensajes de la base central se purgan o anonimizan a los **24 meses** de su 
 La columna `asis_mensaje.retenido_hasta` materializa esa fecha y un job diario de Celery
 ejecuta la purga.
 
-La caché del dispositivo la controla el apoderado: se conserva hasta que él la borre, incluso
-si la cuenta queda suspendida. Cerrar sesión elimina los tokens, no el historial.
+La caché del dispositivo se borra al **cerrar sesión** y al **eliminar la cuenta**, y el
+apoderado puede borrarla cuando quiera desde Perfil → «Borrar mensajes guardados en este
+teléfono». El teléfono puede ser compartido y la caché guarda el nombre del estudiante, así
+que no sobrevive al fin de la sesión.
+
+El respaldo de Android está desactivado (`android:allowBackup="false"` y reglas de extracción
+que excluyen todo), de modo que la caché no llega al Drive del usuario ni a la transferencia
+entre dispositivos.
 
 ## 4. Derechos del titular (ARCO)
 
@@ -47,12 +53,15 @@ si la cuenta queda suspendida. Cerrar sesión elimina los tokens, no el historia
 |---|---|
 | Acceso | El apoderado ve en la app todos los mensajes que le conciernen |
 | Rectificación | A través del colegio, que corrige el dato en su sistema; el directorio se reconcilia |
-| Cancelación | Eliminación de cuenta desde Perfil (RF-I06) |
+| Cancelación | Eliminación de cuenta desde Perfil (RF-I06) o desde la página pública `/canal-api/eliminar-cuenta` |
 | Oposición | Cierre de sesión y eliminación de cuenta, con canal de soporte del colegio |
 
-La eliminación de cuenta revoca sesiones, desactiva el push y anonimiza los datos del
-apoderado. El expediente académico del estudiante pertenece al colegio y no se borra por esta
-vía: es un dato del centro educativo, no del canal.
+La eliminación de cuenta revoca sesiones, desactiva el push, anonimiza los datos del
+apoderado, **anonimiza sus mensajes** (el `texto` y la `metadata` llevan el nombre del
+estudiante, así que no esperan los 24 meses de retención) y borra la caché del dispositivo.
+
+El expediente académico del estudiante pertenece al colegio y no se borra por esta vía: es un
+dato del centro educativo, no del canal.
 
 Queda por confirmar con el área legal del colegio si el tratamiento de datos de menores exige
 comunicación ante la Autoridad Nacional de Protección de Datos Personales.
@@ -91,3 +100,11 @@ El login con teléfono y documento del estudiante, sin OTP, permite que un terce
 ambos datos intente entrar. Se mitiga con coincidencia estricta, límite de intentos, bloqueo
 temporal, sesión única y aviso al dispositivo activo. Está documentado en el ADR-07 y se
 revisará cuando el colegio pueda costear el servicio de mensajería.
+
+**Capturas de pantalla.** La bandeja no usa `FLAG_SECURE`: el apoderado puede guardar un
+aviso (compartir con la familia, imprimir). A cambio, los nombres de los estudiantes
+aparecen en el conmutador de apps recientes. Es una decisión explícita, no un olvido.
+
+**Copia de seguridad de Android.** Desactivada (`allowBackup=false`). La caché local con
+nombres de menores no va a Drive ni se transfiere entre dispositivos.
+

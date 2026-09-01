@@ -10,14 +10,13 @@ from __future__ import annotations
 from django.http import HttpRequest, HttpResponse
 
 CORREO_SOPORTE = "soporte@asiscole.com"
-NOMBRE_APP = "Asis Messenger"
 
 _ELIMINAR_CUENTA_HTML = f"""<!DOCTYPE html>
 <html lang="es-PE">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Eliminar mi cuenta - {NOMBRE_APP}</title>
+<title>Eliminar mi cuenta - Asiscole Messenger</title>
 <style>
   body {{
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -37,15 +36,15 @@ _ELIMINAR_CUENTA_HTML = f"""<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>Eliminar mi cuenta de {NOMBRE_APP}</h1>
+<h1>Eliminar mi cuenta de Asiscole Messenger</h1>
 
-<p>{NOMBRE_APP} es el canal por el que el colegio avisa al apoderado de las
+<p>Asiscole Messenger es el canal por el que el colegio avisa al apoderado de las
 entradas, salidas, incidencias y avisos de su hijo o hija. Puedes eliminar tu
 cuenta cuando quieras, desde la propia aplicacion.</p>
 
 <h2>Desde la aplicacion</h2>
 <ol>
-  <li>Abre {NOMBRE_APP} e inicia sesion.</li>
+  <li>Abre Asiscole Messenger e inicia sesion.</li>
   <li>Entra en la pestana <strong>Perfil</strong>.</li>
   <li>Pulsa <strong>Eliminar mi cuenta</strong>.</li>
   <li>Confirma con el documento del estudiante.</li>

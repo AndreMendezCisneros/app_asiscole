@@ -107,20 +107,9 @@ producción se copia con tar/scp como hasta ahora.
 
 ## 4. Deploy VPS + migrate (nombre nuevo en push y página web)
 
-Ya está desplegado lo de notas/citas/versión. Este paso es **solo** el rename y
-la migración `administracion.0004`.
-
-1. Copia al VPS, como en deploys anteriores:
-   - `backend/apps/common/paginas.py`
-   - `backend/apps/mensajeria/push/fcm.py`
-   - `backend/apps/administracion/migrations/0004_mensaje_asis_messenger.py`
-2. Rebuild `backend worker beat` (no toques Redis ni `.env`).
-3. Migrate:
-
-```bash
-cd /opt/asiscole-canal
-docker compose -f docker-compose.prod.yml exec backend python manage.py migrate administracion
-```
+El backend del repo quedó alineado al VPS (2026-08-31): mismo código de notas,
+versión y FCM. El nombre en push y `/eliminar-cuenta` es **Asiscole Messenger**,
+como en producción. No hay migración `administracion.0004`.
 
 4. Comprueba:
 

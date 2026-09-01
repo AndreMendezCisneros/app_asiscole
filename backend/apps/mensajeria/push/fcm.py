@@ -107,7 +107,7 @@ class ProveedorFCM(ProveedorPush):
                 tokens=lote,
                 data=mensaje.como_datos(),
                 notification=messaging.Notification(
-                    title="Asis Messenger",
+                    title="Asiscole Messenger",
                     body=cuerpo,
                 ),
                 android=messaging.AndroidConfig(

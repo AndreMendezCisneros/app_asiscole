@@ -149,10 +149,10 @@ El canal habla con **BD central + N BDs de colegio** (`SCHOOL_DATABASES`).
 
 | tenant_id | Notas |
 | --- | --- |
-| `jean_piaget` | Outbox + ingesta HTTP; referencia estable. Agenda: sábados y domingos no lectivos (`sin_registro`). |
+| `jean_piaget` | Outbox + ingesta HTTP; referencia estable. Agenda: sábados y domingos no lectivos (`sin_registro`). Faltas derivadas desde el lunes **2026-09-07**. |
 | `asis_academy` | Ingesta HTTP vía `demostracion.asisacademy.com/canal-api`. Un `202` con `creados: 0` significa sin destinatario en directorio, no fallo de red. Agenda: solo el domingo no lectivo. |
 
-El calendario de fin de semana de la agenda se desplegó al VPS el **2026-09-13**.
+Calendario de agenda (fin de semana + arranque JP 2026-09-07) desplegado al VPS el **2026-09-13**.
 
 Ingesta acepta `entrada` \| `salida` \| `incidencia` \| `aviso`.
 

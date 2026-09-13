@@ -137,8 +137,10 @@ infiere nada localmente.
 
 **Consecuencia.** Hay un calendario mínimo por tenant para no inventar falta
 en fin de semana: Jean Piaget sábado y domingo; Asis Academy solo domingo.
-Esos días salen `sin_registro`. Festivos y vacaciones oficiales siguen fuera
-de alcance; si el SIE tiene fila ese día, se muestra.
+Esos días salen `sin_registro`. En Jean Piaget las faltas derivadas empiezan
+el lunes 2026-09-07 (días anteriores sin fila quedan `sin_registro`). Festivos
+y vacaciones oficiales siguen fuera de alcance; si el SIE tiene fila ese día,
+se muestra.
 
 ---
 

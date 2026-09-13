@@ -217,11 +217,14 @@ def detalle_incidencia(
 def confirmar_incidencia(
     apoderado: Apoderado, *, incidencia_id: int, estudiante_id: int
 ) -> None:
-    """Marca la incidencia como confirmada en la BD central (idempotente).
+    """Marca la incidencia como confirmada en la BD central y en el colegio (SIE).
 
-    Verifica que la incidencia exista y pertenezca al estudiante vinculado;
-    no escribe en la BD del colegio.
+    Verifica que la incidencia exista y pertenezca al estudiante vinculado.
+    Propaga `confirmada_app` / `revisado_app` a la BD del colegio para que el
+    SIE web muestre Confirmada (no solo la app).
     """
+    from apps.mensajeria.revisado_colegio import marcar_confirmada_colegio
+
     vinculo = vinculo_estudiante(apoderado, estudiante_id)
     if not circuit_breaker.permite_intentar(vinculo.tenant_id):
         raise UpstreamSchoolDbUnavailable()
@@ -247,6 +250,7 @@ def confirmar_incidencia(
         id_incidencia_colegio=incidencia_id,
         defaults={"confirmada_en": timezone.now()},
     )
+    marcar_confirmada_colegio(vinculo.tenant_id, incidencia_id)
 
 
 def listar_notas(apoderado: Apoderado, *, estudiante_id: int) -> dict:

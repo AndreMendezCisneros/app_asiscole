@@ -37,6 +37,10 @@ def test_confirmar_incidencia_crea_fila_central(apoderado_con_vinculo):
     with (
         patch("apps.academico.services.circuit_breaker") as cb,
         patch("apps.academico.services.Incidencia") as IncidenciaMock,
+        patch(
+            "apps.mensajeria.revisado_colegio.marcar_confirmada_colegio",
+            return_value=1,
+        ) as marcar,
     ):
         cb.permite_intentar.return_value = True
         qs = MagicMock()
@@ -54,6 +58,7 @@ def test_confirmar_incidencia_crea_fila_central(apoderado_con_vinculo):
     assert fila.tenant_id == TENANT
     assert fila.id_incidencia_colegio == 55
     assert fila.confirmada_en is not None
+    marcar.assert_called_once_with(TENANT, 55)
 
 
 @pytest.mark.django_db
@@ -68,6 +73,10 @@ def test_confirmar_incidencia_es_idempotente(apoderado_con_vinculo):
     with (
         patch("apps.academico.services.circuit_breaker") as cb,
         patch("apps.academico.services.Incidencia") as IncidenciaMock,
+        patch(
+            "apps.mensajeria.revisado_colegio.marcar_confirmada_colegio",
+            return_value=1,
+        ) as marcar,
     ):
         cb.permite_intentar.return_value = True
         qs = MagicMock()
@@ -81,6 +90,7 @@ def test_confirmar_incidencia_es_idempotente(apoderado_con_vinculo):
         )
 
     assert ConfirmacionIncidencia.objects.count() == 1
+    marcar.assert_called_once_with(TENANT, 55)
 
 
 @pytest.mark.django_db

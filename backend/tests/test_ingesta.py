@@ -145,7 +145,47 @@ def test_incidencia_con_payload_completo(apoderado_vinculado):
     )
     assert len(creados) == 1
     assert "Uso de celular en clase" in creados[0].texto
+    assert "Observaciones:" not in creados[0].texto
     assert creados[0].metadata["id_falta"] == 7
+
+
+@pytest.mark.django_db
+def test_incidencia_con_observaciones_en_texto(apoderado_vinculado):
+    creados = _crear(
+        "incidencia",
+        {
+            "id_estudiante": 11,
+            "nombre_completo": "Estudiante Prueba",
+            "id_falta": 7,
+            "nombre_falta": "Ausencia: no se registró entrada",
+            "categoria": "Conducta",
+            "es_grave": False,
+            "nombre_usuario_registro": "Jesús Yaranga",
+            "observaciones": "Según informe de la profesora Sheila.",
+        },
+    )
+    assert len(creados) == 1
+    assert "Observaciones: Según informe de la profesora Sheila." in creados[0].texto
+    assert "Reportada por Jesús Yaranga." in creados[0].texto
+
+
+@pytest.mark.django_db
+def test_incidencia_con_observaciones_en_blanco_omite_el_campo(apoderado_vinculado):
+    creados = _crear(
+        "incidencia",
+        {
+            "id_estudiante": 11,
+            "nombre_completo": "Estudiante Prueba",
+            "id_falta": 7,
+            "nombre_falta": "Uso de celular en clase",
+            "categoria": "Disciplina",
+            "es_grave": False,
+            "nombre_usuario_registro": "Auxiliar",
+            "observaciones": "   ",
+        },
+    )
+    assert len(creados) == 1
+    assert "Observaciones:" not in creados[0].texto
 
 
 @pytest.mark.django_db

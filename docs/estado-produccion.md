@@ -1,6 +1,6 @@
 # Estado de producción — Canal Asiscole Messenger
 
-Actualizado: **2026-08-13**.
+Actualizado: **2026-09-13**.
 
 Documento de verdad operativa: qué está desplegado, qué APK distribuir y qué
 lecciones no repetir. Complementa [`deploy-vps.md`](deploy-vps.md).
@@ -149,8 +149,10 @@ El canal habla con **BD central + N BDs de colegio** (`SCHOOL_DATABASES`).
 
 | tenant_id | Notas |
 | --- | --- |
-| `jean_piaget` | Outbox + ingesta HTTP; referencia estable |
-| `asis_academy` | Ingesta HTTP vía `demostracion.asisacademy.com/canal-api`. Un `202` con `creados: 0` significa sin destinatario en directorio, no fallo de red. |
+| `jean_piaget` | Outbox + ingesta HTTP; referencia estable. Agenda: sábados y domingos no lectivos (`sin_registro`). |
+| `asis_academy` | Ingesta HTTP vía `demostracion.asisacademy.com/canal-api`. Un `202` con `creados: 0` significa sin destinatario en directorio, no fallo de red. Agenda: solo el domingo no lectivo. |
+
+El calendario de fin de semana de la agenda se desplegó al VPS el **2026-09-13**.
 
 Ingesta acepta `entrada` \| `salida` \| `incidencia` \| `aviso`.
 

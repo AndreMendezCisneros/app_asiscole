@@ -135,8 +135,10 @@ estudiante y fecha.
 **Decisión.** La API devuelve el mes completo y deriva los estados ausentes. La app nunca
 infiere nada localmente.
 
-**Consecuencia.** Falta definir con el colegio el calendario lectivo para distinguir un día
-sin clases de una falta real. Mientras tanto se marca `sin_registro`.
+**Consecuencia.** Hay un calendario mínimo por tenant para no inventar falta
+en fin de semana: Jean Piaget sábado y domingo; Asis Academy solo domingo.
+Esos días salen `sin_registro`. Festivos y vacaciones oficiales siguen fuera
+de alcance; si el SIE tiene fila ese día, se muestra.
 
 ---
 

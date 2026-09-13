@@ -364,9 +364,14 @@ paths:
       tags: [asistencias]
       summary: Agenda mensual del estudiante activo (RF-F01, RF-F02)
       description: |
-        Devuelve un día por cada fecha lectiva del mes. Los estados `falta` y
-        `sin_registro` no existen como filas en la base del colegio: se derivan de la
-        ausencia de registro, por eso siempre se responde el mes completo.
+        Devuelve un día por cada fecha del mes (el mes completo). Los estados
+        `falta` y `sin_registro` no existen como filas en la base del colegio:
+        se derivan de la ausencia de registro.
+
+        `falta` solo se inventa en un día **lectivo** del tenant que ya pasó y
+        no tiene fila. Días no lectivos quedan `sin_registro` (en blanco en la
+        app): Jean Piaget sábado y domingo; Asis Academy solo domingo. Si el
+        SIE sí registró ese día (taller, extra), se muestra el registro real.
 
         Requiere conexión. El cliente nunca infiere estos datos localmente.
       parameters:

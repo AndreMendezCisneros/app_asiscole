@@ -8,9 +8,8 @@ from apps.mensajeria.plantillas.base import ContextoEvento, PlantillaBase
 class PlantillaIncidencia(PlantillaBase):
     """Aviso de una incidencia registrada por el colegio.
 
-    El detalle completo (observaciones y evidencias) se consulta por API; la
-    notificacion solo adelanta la falta, su categoria y quien la reporto, que es
-    lo que exige RF-G04.
+    Adelanta la falta, su categoria, quien la reporto y, si el auxiliar las
+    escribio, las observaciones. Las evidencias se consultan por API (RF-G04).
     """
 
     tipo = "incidencia"
@@ -27,4 +26,7 @@ class PlantillaIncidencia(PlantillaBase):
         frases = [f"Se registró una incidencia{gravedad} de {ctx.estudiante_nombre}: {detalle}."]
         if ctx.reportado_por:
             frases.append(f"Reportada por {ctx.reportado_por}.")
+        observaciones = (ctx.observaciones or "").strip()
+        if observaciones:
+            frases.append(f"Observaciones: {observaciones}")
         return " ".join(frases)

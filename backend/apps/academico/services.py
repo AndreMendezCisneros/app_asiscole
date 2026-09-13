@@ -32,7 +32,23 @@ def _mapear_estado(estado_colegio: str) -> str:
         return "a_tiempo"
     if valor == "tarde":
         return "tarde"
+    if valor == "falta":
+        return "falta"
     return "sin_registro"
+
+
+def _es_dia_no_lectivo(tenant_id: str, fecha: date) -> bool:
+    """Fin de semana sin clases, por colegio.
+
+    Jean Piaget: sábado y domingo. Asis Academy: solo domingo. El resto
+    de tenants no cambia (un día pasado sin fila sigue siendo falta).
+    """
+    dia = fecha.weekday()
+    if tenant_id == "jean_piaget":
+        return dia >= 5
+    if tenant_id == "asis_academy":
+        return dia == 6
+    return False
 
 
 def _mapa_confirmaciones(
@@ -105,10 +121,24 @@ def agenda_mensual(
                 }
             )
         else:
+            # Temporal JP (arranque lunes 2026-09-07): no mostrar faltas
+            # inventadas por días sin escaneo antes de esa fecha.
+            inicio_oficial = date(2026, 9, 7)
+            if _es_dia_no_lectivo(vinculo.tenant_id, fecha):
+                estado_dia = "sin_registro"
+            elif (
+                vinculo.tenant_id == "jean_piaget"
+                and fecha < inicio_oficial
+            ):
+                estado_dia = "sin_registro"
+            elif fecha < hoy:
+                estado_dia = "falta"
+            else:
+                estado_dia = "sin_registro"
             items.append(
                 {
                     "fecha": fecha.isoformat(),
-                    "estado": "falta" if fecha < hoy else "sin_registro",
+                    "estado": estado_dia,
                     "hora_entrada": None,
                     "hora_salida": None,
                     "tipo_salida": None,

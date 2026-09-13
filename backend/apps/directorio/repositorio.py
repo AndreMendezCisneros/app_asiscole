@@ -32,17 +32,38 @@ _COLUMNAS = (
     "nivel_educativo, telefono_contacto"
 )
 
-_SQL_POR_TELEFONO = f"""
-    SELECT {_COLUMNAS}
-      FROM public.asis_v_directorio_origen
-     WHERE activo = TRUE
-       AND telefono_digitos = ANY(%s)
+_SQL_POR_TELEFONO = """
+    SELECT id_estudiante, codigo_barras, nombre_completo, grado, seccion,
+           nivel_educativo,
+           trim(both ' /' FROM concat_ws(
+             ' / ',
+             nullif(btrim(telefono_contacto), ''),
+             nullif(btrim(telefono_emergencia), '')
+           ))
+      FROM public.estudiantes
+     WHERE COALESCE(activo, TRUE) = TRUE
+       AND (
+            regexp_replace(COALESCE(telefono_contacto, ''), '\D', '', 'g') = ANY(%s)
+         OR regexp_replace(COALESCE(telefono_emergencia, ''), '\D', '', 'g') = ANY(%s)
+       )
 """
 
-_SQL_TODOS = f"""
-    SELECT {_COLUMNAS}
-      FROM public.asis_v_directorio_origen
-     WHERE activo = TRUE
+# La pasada nocturna no puede depender solo de la vista: si esa vista omite
+# telefono_emergencia, al dia siguiente marca inactivo el celular del papa.
+_SQL_TODOS = """
+    SELECT id_estudiante, codigo_barras, nombre_completo, grado, seccion,
+           nivel_educativo,
+           trim(both ' /' FROM concat_ws(
+             ' / ',
+             nullif(btrim(telefono_contacto), ''),
+             nullif(btrim(telefono_emergencia), '')
+           ))
+      FROM public.estudiantes
+     WHERE COALESCE(activo, TRUE) = TRUE
+       AND (
+            nullif(btrim(telefono_contacto), '') IS NOT NULL
+         OR nullif(btrim(telefono_emergencia), '') IS NOT NULL
+       )
 """
 
 #: Filas que se traen por viaje en la reconciliacion nocturna.
@@ -122,7 +143,7 @@ def consultar_colegio(tenant_id: str, telefono_e164: str) -> list[VinculoDTO]:
 
     alias = tenant_alias(tenant_id)
     with connections[alias].cursor() as cursor:
-        cursor.execute(_SQL_POR_TELEFONO, [candidatos])
+        cursor.execute(_SQL_POR_TELEFONO, [candidatos, candidatos])
         filas = cursor.fetchall()
 
     vinculos: list[VinculoDTO] = []

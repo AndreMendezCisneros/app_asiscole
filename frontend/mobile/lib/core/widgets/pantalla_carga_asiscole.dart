@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/asis_colors.dart';
 import 'asiscole_logo.dart';
 
 /// Pantalla de carga amigable (logo + mensaje + progreso).
@@ -23,11 +23,11 @@ class PantallaCargaAsiscole extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppTheme.blanco,
+                color: context.asis.superficie,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.moradoPrincipal.withValues(alpha: 0.12),
+                    color: context.asis.morado.withValues(alpha: 0.12),
                     blurRadius: 24,
                     offset: const Offset(0, 10),
                   ),
@@ -45,8 +45,8 @@ class PantallaCargaAsiscole extends StatelessWidget {
             Text(
               mensaje,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppTheme.textoSecundario,
+              style: TextStyle(
+                color: context.asis.textoSecundario,
                 fontWeight: FontWeight.w600,
                 fontSize: 15,
               ),

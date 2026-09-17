@@ -2,4 +2,6 @@
 <resources>
     <color name="ic_launcher_background">#5B21E6</color>
     <color name="asiscole_accent">#3D5AFE</color>
+    <!-- Fondo del splash: igual que AppTheme.fondo en modo claro. -->
+    <color name="splash_fondo">#F8FAFC</color>
 </resources>

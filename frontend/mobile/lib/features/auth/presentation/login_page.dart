@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/router/app_router.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/asis_colors.dart';
 import '../../../core/util/formato.dart';
 import '../../../core/widgets/asiscole_logo.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
@@ -73,24 +73,24 @@ class _LoginPageState extends State<LoginPage> {
     return InputDecoration(
       hintText: hint,
       hintStyle: TextStyle(
-        color: AppTheme.textoSecundario.withValues(alpha: 0.7),
+        color: context.asis.textoSecundario.withValues(alpha: 0.7),
       ),
       filled: true,
-      fillColor: AppTheme.blanco,
+      fillColor: context.asis.superficie,
       prefixIcon: prefix,
       suffixIcon: suffix,
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
       border: OutlineInputBorder(
         borderRadius: _radioCampo,
-        borderSide: const BorderSide(color: AppTheme.borde),
+        borderSide: BorderSide(color: context.asis.borde),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: _radioCampo,
-        borderSide: const BorderSide(color: AppTheme.borde),
+        borderSide: BorderSide(color: context.asis.borde),
       ),
-      focusedBorder: const OutlineInputBorder(
+      focusedBorder: OutlineInputBorder(
         borderRadius: _radioCampo,
-        borderSide: BorderSide(color: AppTheme.moradoPrincipal, width: 1.8),
+        borderSide: BorderSide(color: context.asis.morado, width: 1.8),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: _radioCampo,
@@ -106,7 +106,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.blanco,
+      backgroundColor: context.asis.superficie,
       body: Stack(
         children: [
           const FondoAsiscole(estilo: FondoEstilo.login),
@@ -130,11 +130,11 @@ class _LoginPageState extends State<LoginPage> {
                             child: Container(
                               padding: const EdgeInsets.all(18),
                               decoration: BoxDecoration(
-                                color: AppTheme.blanco,
+                                color: context.asis.superficie,
                                 borderRadius: BorderRadius.circular(28),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppTheme.moradoPrincipal
+                                    color: context.asis.morado
                                         .withValues(alpha: 0.12),
                                     blurRadius: 28,
                                     offset: const Offset(0, 12),
@@ -145,25 +145,25 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                           const SizedBox(height: 28),
-                          const Text(
+                          Text(
                             '¡Bienvenido! 👋',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.w800,
-                              color: AppTheme.texto,
+                              color: context.asis.texto,
                               letterSpacing: -0.4,
                             ),
                           ),
                           const SizedBox(height: 8),
-                          const Text(
+                          Text(
                             'Ingresa tus datos para recibir los avisos\n'
                             'del colegio en Asis Messenger',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
                               height: 1.45,
-                              color: AppTheme.textoSecundario,
+                              color: context.asis.textoSecundario,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -175,17 +175,17 @@ class _LoginPageState extends State<LoginPage> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: AppTheme.fondo,
+                                color: context.asis.fondo,
                                 borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: AppTheme.borde),
+                                border: Border.all(color: context.asis.borde),
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.shield_outlined,
                                     size: 16,
-                                    color: AppTheme.moradoPrincipal,
+                                    color: context.asis.morado,
                                   ),
                                   SizedBox(width: 8),
                                   Text(
@@ -193,7 +193,7 @@ class _LoginPageState extends State<LoginPage> {
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
-                                      color: AppTheme.moradoPrincipal,
+                                      color: context.asis.morado,
                                     ),
                                   ),
                                 ],
@@ -218,8 +218,8 @@ class _LoginPageState extends State<LoginPage> {
                             autofillHints: const [
                               AutofillHints.telephoneNumber,
                             ],
-                            style: const TextStyle(
-                              color: AppTheme.texto,
+                            style: TextStyle(
+                              color: context.asis.texto,
                               fontWeight: FontWeight.w600,
                               fontSize: 16,
                             ),
@@ -240,15 +240,15 @@ class _LoginPageState extends State<LoginPage> {
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: AppTheme.moradoClaro
+                                          color: context.asis.moradoClaro
                                               .withValues(alpha: 0.18),
                                           borderRadius:
                                               BorderRadius.circular(8),
                                         ),
-                                        child: const Text(
+                                        child: Text(
                                           TelefonoPeru.prefijo,
                                           style: TextStyle(
-                                            color: AppTheme.moradoPrincipal,
+                                            color: context.asis.morado,
                                             fontWeight: FontWeight.w800,
                                             fontSize: 14,
                                           ),
@@ -276,16 +276,16 @@ class _LoginPageState extends State<LoginPage> {
                             inputFormatters: [
                               LengthLimitingTextInputFormatter(50),
                             ],
-                            style: const TextStyle(
-                              color: AppTheme.texto,
+                            style: TextStyle(
+                              color: context.asis.texto,
                               fontWeight: FontWeight.w600,
                               fontSize: 16,
                             ),
                             decoration: _decoCampo(
                               hint: '70123456',
-                              prefix: const Icon(
+                              prefix: Icon(
                                 Icons.badge_outlined,
-                                color: AppTheme.moradoSecundario,
+                                color: context.asis.moradoSecundario,
                               ),
                             ),
                             onFieldSubmitted: (_) => _enviar(),
@@ -305,7 +305,7 @@ class _LoginPageState extends State<LoginPage> {
                                     : (v) => setState(
                                           () => _aceptaTerminos = v ?? false,
                                         ),
-                                activeColor: AppTheme.moradoPrincipal,
+                                activeColor: context.asis.morado,
                               ),
                               Expanded(
                                 child: Padding(
@@ -313,19 +313,19 @@ class _LoginPageState extends State<LoginPage> {
                                   child: Wrap(
                                     crossAxisAlignment: WrapCrossAlignment.center,
                                     children: [
-                                      const Text(
+                                      Text(
                                         'Acepto los ',
                                         style: TextStyle(
-                                          color: AppTheme.texto,
+                                          color: context.asis.texto,
                                           fontSize: 13,
                                         ),
                                       ),
                                       GestureDetector(
                                         onTap: () => context.push(Rutas.terminos),
-                                        child: const Text(
+                                        child: Text(
                                           'términos y la política de privacidad',
                                           style: TextStyle(
-                                            color: AppTheme.moradoPrincipal,
+                                            color: context.asis.morado,
                                             fontWeight: FontWeight.w700,
                                             fontSize: 13,
                                             decoration: TextDecoration.underline,
@@ -366,7 +366,7 @@ class _LoginPageState extends State<LoginPage> {
                                 .textTheme
                                 .bodySmall
                                 ?.copyWith(
-                                  color: AppTheme.textoSecundario,
+                                  color: context.asis.textoSecundario,
                                   height: 1.4,
                                 ),
                           ),
@@ -393,10 +393,10 @@ class _EtiquetaCampo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       texto,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: AppTheme.textoSecundario,
+        color: context.asis.textoSecundario,
       ),
     );
   }
@@ -418,10 +418,10 @@ class _ContactoSoporte extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.support_agent_outlined,
               size: 18,
-              color: AppTheme.moradoPrincipal,
+              color: context.asis.morado,
             ),
             const SizedBox(width: 8),
             Flexible(
@@ -439,9 +439,9 @@ class _ContactoSoporte extends StatelessWidget {
                   ],
                 ),
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  color: AppTheme.moradoPrincipal,
+                  color: context.asis.morado,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -464,18 +464,18 @@ class _BotonIngresar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppTheme.moradoPrincipal,
-            AppTheme.moradoSecundario,
-            AppTheme.moradoClaro,
+            context.asis.morado,
+            context.asis.moradoSecundario,
+            context.asis.moradoClaro,
           ],
         ),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.moradoPrincipal.withValues(alpha: 0.35),
+            color: context.asis.morado.withValues(alpha: 0.35),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),

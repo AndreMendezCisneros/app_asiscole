@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/asis_colors.dart';
 import 'asiscole_logo.dart';
 
 /// Estado vacío / error reutilizable.
@@ -33,8 +33,8 @@ class EmptyStateAsiscole extends StatelessWidget {
             Text(
               mensaje,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppTheme.textoSecundario,
+              style: TextStyle(
+                color: context.asis.textoSecundario,
                 fontSize: 15,
                 height: 1.4,
               ),

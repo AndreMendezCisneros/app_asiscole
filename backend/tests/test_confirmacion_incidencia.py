@@ -143,13 +143,40 @@ def test_listar_incidencias_mezcla_confirmacion(apoderado_con_vinculo):
         id_incidencia_colegio=1,
         confirmada_en=timezone.now(),
     )
-    incidencia = SimpleNamespace(
+    item = _listar_una(apo, _incidencia_falsa())
+    assert item["confirmada"] is True
+    assert item["confirmada_en"] is not None
+
+
+@pytest.mark.django_db
+def test_listar_incidencias_incluye_observaciones(apoderado_con_vinculo):
+    """El auxiliar las escribe al registrar la falta y el apoderado las lee."""
+    item = _listar_una(
+        apoderado_con_vinculo,
+        _incidencia_falsa(observaciones="Llego 20 minutos tarde sin justificar"),
+    )
+    assert item["observaciones"] == "Llego 20 minutos tarde sin justificar"
+
+
+@pytest.mark.django_db
+def test_listar_incidencias_sin_observaciones_devuelve_null(apoderado_con_vinculo):
+    item = _listar_una(apoderado_con_vinculo, _incidencia_falsa())
+    assert item["observaciones"] is None
+
+
+def _incidencia_falsa(*, observaciones: str | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
         pk=1,
         fecha_hora_registro=timezone.now(),
         falta=SimpleNamespace(categoria="Leve", nombre_falta="Tardanza", es_grave=False),
         estado_evidencia="Sin evidencia",
         usuario_registro=SimpleNamespace(nombre_completo="Tutor"),
+        observaciones=observaciones,
     )
+
+
+def _listar_una(apoderado, incidencia: SimpleNamespace) -> dict:
+    """Ejecuta `listar_incidencias` con la BD del colegio sustituida."""
 
     class _QS(list):
         def select_related(self, *args):
@@ -171,8 +198,6 @@ def test_listar_incidencias_mezcla_confirmacion(apoderado_con_vinculo):
         cb.permite_intentar.return_value = True
         IncidenciaMock.objects.using.return_value = _QS([incidencia])
 
-        resultado = services.listar_incidencias(apo, estudiante_id=ESTUDIANTE_ID)
+        resultado = services.listar_incidencias(apoderado, estudiante_id=ESTUDIANTE_ID)
 
-    item = resultado["items"][0]
-    assert item["confirmada"] is True
-    assert item["confirmada_en"] is not None
+    return resultado["items"][0]

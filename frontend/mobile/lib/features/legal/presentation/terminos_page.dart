@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/legal/terminos_legales.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/asis_colors.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
 
 /// Lectura de términos y condiciones (login o perfil).
@@ -43,11 +43,11 @@ class _TerminosPageState extends State<TerminosPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.fondo,
+      backgroundColor: context.asis.fondo,
       appBar: AppBar(
         title: const Text(TerminosLegales.titulo),
-        backgroundColor: AppTheme.blanco,
-        foregroundColor: AppTheme.texto,
+        backgroundColor: context.asis.superficie,
+        foregroundColor: context.asis.texto,
       ),
       body: Stack(
         children: [
@@ -62,8 +62,8 @@ class _TerminosPageState extends State<TerminosPage> {
               children: [
                 Text(
                   'Versión ${TerminosLegales.version}',
-                  style: const TextStyle(
-                    color: AppTheme.textoSecundario,
+                  style: TextStyle(
+                    color: context.asis.textoSecundario,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -71,8 +71,8 @@ class _TerminosPageState extends State<TerminosPage> {
                   const SizedBox(height: 4),
                   Text(
                     'Aceptados el ${_fmt(widget.aceptadosEn!)}',
-                    style: const TextStyle(
-                      color: AppTheme.textoSecundario,
+                    style: TextStyle(
+                      color: context.asis.textoSecundario,
                       fontSize: 13,
                     ),
                   ),
@@ -80,8 +80,8 @@ class _TerminosPageState extends State<TerminosPage> {
                 const SizedBox(height: 16),
                 SelectableText(
                   _texto!,
-                  style: const TextStyle(
-                    color: AppTheme.texto,
+                  style: TextStyle(
+                    color: context.asis.texto,
                     height: 1.45,
                     fontSize: 14,
                   ),

@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import secrets
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -559,6 +560,55 @@ def logout(sesion: SesionActiva) -> None:
             apoderado_id=sesion.apoderado_id, device_id=sesion.device_id
         ).update(activo=False)
     logger.info("logout", extra={"apoderado_id": sesion.apoderado_id, "sesion_id": sesion.pk})
+
+
+def desactivar_push_sin_sesion(*, simular: bool = False) -> int:
+    """Desactiva los tokens de push de cuentas que ya no tienen sesion.
+
+    `logout` desactiva el token del dispositivo, pero si esa peticion no llega
+    al servidor (el cliente cierra la sesion igual) el token queda vivo y el
+    apoderado sigue recibiendo avisos que no puede abrir. Esta rutina cierra ese
+    hueco por el lado del servidor, sin depender de que el cliente actualice.
+
+    Solo mira el estado de la sesion, no su vencimiento: una sesion vencida se
+    renueva al volver a entrar y en ese login se registra el token otra vez.
+
+    Args:
+        simular: Si es True cuenta los tokens afectados pero no los desactiva.
+
+    Returns:
+        Cuantos tokens activos quedaron (o quedarian) desactivados.
+    """
+    con_sesion = SesionActiva.objects.filter(estado=SESION_ACTIVA).values("apoderado_id")
+    huerfanos = PushToken.objects.filter(activo=True).exclude(apoderado_id__in=con_sesion)
+    total = huerfanos.count()
+    if total and not simular:
+        huerfanos.update(activo=False)
+    logger.info("push_huerfanos_purgados", extra={"tokens": total, "simulado": simular})
+    return total
+
+
+def desactivar_tokens_invalidos(tokens: Sequence[str]) -> int:
+    """Desactiva los tokens que el proveedor de push declaro muertos.
+
+    `ResultadoEnvio.tokens_invalidos` recoge los que FCM o APNs rechazan por
+    desinstalacion o rotacion. Sin esta baja se reintentaria contra ellos en
+    cada aviso, y un cierre de sesion que borra el token en el dispositivo
+    nunca se reflejaria en el servidor.
+
+    Args:
+        tokens: Valores de token, tal como los devolvio el proveedor.
+
+    Returns:
+        Cuantas filas quedaron desactivadas.
+    """
+    valores = [t for t in tokens if t]
+    if not valores:
+        return 0
+    total = PushToken.objects.filter(token__in=valores, activo=True).update(activo=False)
+    if total:
+        logger.info("push_tokens_invalidos_desactivados", extra={"tokens": total})
+    return total
 
 
 # ---------------------------------------------------------------------------

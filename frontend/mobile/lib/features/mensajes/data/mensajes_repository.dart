@@ -18,7 +18,15 @@ class MensajesRepository {
 
   static const int _maxPaginasSync = 5;
 
-  Future<List<Mensaje>> sincronizar() async {
+  /// Descarga hasta [_maxPaginasSync] páginas y devuelve la bandeja completa.
+  ///
+  /// [alAvanzar] recibe la bandeja en cuanto está la primera página, que es lo
+  /// único que el apoderado ve sin desplazar. El resto del historial se sigue
+  /// trayendo por detrás en lugar de retener la pantalla hasta la última
+  /// página.
+  Future<List<Mensaje>> sincronizar({
+    Future<void> Function(List<Mensaje> parcial)? alAvanzar,
+  }) async {
     // No cortar por connectivity_plus: en MIUI a veces marca “sin red” con
     // datos activos. Si la API falla, el cubit cae a caché.
     await _flushLeidosPendientes();
@@ -44,7 +52,11 @@ class MensajesRepository {
         pagina.items.map((m) => m.toLocalRow()).toList(),
       );
       cursor = pagina.nextCursor;
-      if (cursor == null || cursor.isEmpty || pagina.items.isEmpty) break;
+      final ultima = cursor == null || cursor.isEmpty || pagina.items.isEmpty;
+      if (i == 0 && !ultima && alAvanzar != null) {
+        await alAvanzar(await _desdeCache());
+      }
+      if (ultima) break;
       // Tras la primera página, paginar solo con cursor (sin since).
       since = null;
     }

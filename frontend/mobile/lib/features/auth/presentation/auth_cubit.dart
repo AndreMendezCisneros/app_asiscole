@@ -40,7 +40,7 @@ class AuthCubit extends Cubit<AuthState> {
 
   /// Restaura la sesión guardada al abrir la app.
   Future<void> iniciar() async {
-    emit(const Authenticating());
+    emit(const Authenticating(restaurando: true));
 
     if (!await _repositorio.haySesionGuardada) {
       emit(const Unauthenticated());

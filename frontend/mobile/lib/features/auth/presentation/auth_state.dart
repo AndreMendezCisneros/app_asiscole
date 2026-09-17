@@ -45,7 +45,16 @@ final class Unauthenticated extends AuthState {
 
 /// Login o restauración de sesión en curso.
 final class Authenticating extends AuthState {
-  const Authenticating();
+  const Authenticating({this.restaurando = false});
+
+  /// True cuando se está restaurando la sesión guardada al abrir la app.
+  ///
+  /// El router lo usa para quedarse en la pantalla de arranque: un login en
+  /// curso, en cambio, debe seguir mostrando el formulario con su spinner.
+  final bool restaurando;
+
+  @override
+  List<Object?> get props => [restaurando];
 }
 
 /// Sesión válida y con red: la app sincroniza con el backend.

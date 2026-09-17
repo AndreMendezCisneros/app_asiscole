@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fondo del splash en modo oscuro: igual que AppTheme.fondoOscuro. -->
+    <color name="splash_fondo">#0B1020</color>
+</resources>

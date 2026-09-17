@@ -1,8 +1,8 @@
 /**
- * Línea base del host actual (Hetzner compartido ~4 vCPU / 8 GB, Gunicorn 3×2).
+ * Línea base (~40 VU) para el dedicado (Gunicorn 8×4).
  *
- * NO usar el script de 1000 VU contra este host: mide el techo de 6 workers y
- * puede degradar el SIE que vive en la misma máquina.
+ * El script de 800/1000 VU es un techo; 40 VU se parece más a padres abriendo
+ * la app. El SIE sigue en el mismo host: no correr en el pico escolar a ciegas.
  *
  * Uso (staging o prod fuera de horario escolar, con OK explícito):
  *   k6 run -e BASE_URL=https://jeanpiaget.asiscole.com/canal-api/v0.1 \

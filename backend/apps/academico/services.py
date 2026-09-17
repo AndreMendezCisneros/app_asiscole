@@ -185,6 +185,10 @@ def listar_incidencias(
                 "es_grave": i.falta.es_grave,
                 "tiene_evidencia": i.estado_evidencia == "Con evidencia",
                 "reportado_por": i.usuario_registro.nombre_completo,
+                # Las observaciones del auxiliar ya viajaban en el detalle, que
+                # la app no llega a pedir. Clave anadida: un cliente antiguo la
+                # ignora sin error.
+                "observaciones": i.observaciones,
                 **_flags_confirmacion(confirmaciones.get(i.pk)),
             }
             for i in filas

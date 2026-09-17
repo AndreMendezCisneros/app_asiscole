@@ -13,8 +13,10 @@ import 'core/device/info_dispositivo.dart';
 import 'core/push/servicio_push.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/preferencia_tema.dart';
 import 'core/version/actualizador_app.dart';
 import 'core/version/version_app_api.dart';
+import 'core/version/version_instalada.dart';
 import 'features/auth/data/session_storage.dart';
 import 'features/auth/presentation/auth_cubit.dart';
 import 'features/auth/presentation/auth_state.dart';
@@ -56,11 +58,15 @@ class _AsiscoleAppState extends State<AsiscoleApp> {
       }
     });
     _tokenRefresh = push.tokensActualizados.listen((_) => _registrarPushToken());
+    unawaited(sl<PreferenciaTema>().cargar());
     unawaited(_comprobarVersion());
   }
 
   /// Fail-open: si el endpoint no responde, la app arranca igual.
   Future<void> _comprobarVersion() async {
+    // El `versionCode` ya no se resuelve antes del primer frame, y el servidor
+    // compara contra la cabecera `X-App-Version`: sin ella no podría decidir.
+    await VersionInstalada.cargar();
     final politica = await sl<VersionAppApi>().consultar();
     if (!mounted || politica == null) return;
     if (politica.actualizacionObligatoria) {
@@ -186,13 +192,21 @@ class _AsiscoleAppState extends State<AsiscoleApp> {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: sl<PreferenciaTema>().modo,
+      builder: (context, modo, _) => _conTema(modo),
+    );
+  }
+
+  Widget _conTema(ThemeMode modo) {
     final bloqueo = _bloqueo;
     if (bloqueo != null) {
       return MaterialApp(
         title: Env.nombreApp,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.claro,
-        themeMode: ThemeMode.light,
+        darkTheme: AppTheme.oscuro,
+        themeMode: modo,
         locale: const Locale('es', 'PE'),
         supportedLocales: const [Locale('es', 'PE'), Locale('es')],
         home: ActualizacionObligatoriaPage(politica: bloqueo),
@@ -218,7 +232,8 @@ class _AsiscoleAppState extends State<AsiscoleApp> {
           title: Env.nombreApp,
           debugShowCheckedModeBanner: false,
           theme: AppTheme.claro,
-          themeMode: ThemeMode.light,
+          darkTheme: AppTheme.oscuro,
+          themeMode: modo,
           routerConfig: _router,
           locale: const Locale('es', 'PE'),
           supportedLocales: const [Locale('es', 'PE'), Locale('es')],

@@ -7,12 +7,10 @@ import 'package:intl/intl.dart';
 import '../../../core/di/injector.dart';
 import '../../../core/error/api_error.dart';
 import '../../../core/error/error_codes.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/asis_colors.dart';
 import '../../../core/widgets/chip_hijo_activo.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
-import '../../../core/widgets/pantalla_carga_asiscole.dart';
 import '../../../core/widgets/selector_hijo_sheet.dart';
 import '../../../core/widgets/tour_asiscole.dart';
 import '../../auth/domain/perfil.dart';
@@ -33,8 +31,11 @@ class _IncidenciasPageState extends State<IncidenciasPage>
   bool _cargando = true;
   EstudianteVinculado? _hijo;
   int? _estudianteId;
-  bool _citacionActiva = false;
   int _epochVisto = 0;
+
+  /// Último listado por estudiante, solo en memoria (Ley N.º 29733: nada de
+  /// incidencias persistidas en el dispositivo). Evita repedir al ir y volver.
+  final Map<int, _ListadoCacheado> _listadosEnMemoria = {};
 
   @override
   String get rutaDeEstaSeccion => '/incidencias';
@@ -45,8 +46,7 @@ class _IncidenciasPageState extends State<IncidenciasPage>
     final repo = sl<PerfilRepository>();
     _epochVisto = repo.estudianteActivoEpoch.value;
     repo.estudianteActivoEpoch.addListener(_onEstudianteActivoCambio);
-    _cargar();
-    unawaited(_cargarFlagCitacion());
+    unawaited(_cargar());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) registrarListenerRuta();
       if (!mounted) return;
@@ -73,7 +73,9 @@ class _IncidenciasPageState extends State<IncidenciasPage>
     if (epoch == _epochVisto) return;
     _epochVisto = epoch;
     if (!mounted) return;
-    unawaited(_cargar());
+    // Otro hijo: lo ya pintado no le pertenece.
+    setState(() => _items = null);
+    unawaited(_cargar(forzar: true));
   }
 
   Future<void> _cambiarHijoDesdeChip() async {
@@ -84,29 +86,27 @@ class _IncidenciasPageState extends State<IncidenciasPage>
     // Recarga vía listener de estudianteActivoEpoch (evita doble fetch).
   }
 
-  Future<void> _cargarFlagCitacion() async {
-    try {
-      final resp = await sl<ApiClient>().dio.get<Map<String, dynamic>>(
-        '/feature-flags',
-      );
-      if (mounted) {
-        setState(() => _citacionActiva = resp.data?['citacion'] == true);
-      }
-    } on Object {
-      if (mounted) setState(() => _citacionActiva = false);
-    }
-  }
+  /// Resuelve el hijo activo y trae su listado.
+  ///
+  /// [forzar] solo cuando hay motivo (cambio de hijo o pull-to-refresh): releer
+  /// perfil y lista de hijos en cada entrada costaba dos viajes antes de poder
+  /// pedir siquiera las incidencias.
+  Future<void> _cargar({bool forzar = false}) async {
+    final repo = sl<PerfilRepository>();
 
-  Future<void> _cargar() async {
+    // Si ya se sabe de quién son los datos, el listado viaja con el perfil.
+    final idConocido = forzar ? null : repo.estudianteActivoIdCacheado;
+    final listadoEnVuelo =
+        idConocido == null ? null : _pedirListado(idConocido, forzar: forzar);
+
     setState(() {
       _cargando = true;
       _error = null;
     });
     try {
-      final repo = sl<PerfilRepository>();
       final resultados = await Future.wait([
-        repo.obtener(forzar: true),
-        repo.estudiantes(forzar: true),
+        repo.obtener(forzar: forzar),
+        repo.estudiantes(forzar: forzar),
       ]);
       final perfil = resultados[0] as Perfil;
       final hijos = resultados[1] as List<EstudianteVinculado>;
@@ -135,13 +135,21 @@ class _IncidenciasPageState extends State<IncidenciasPage>
         });
       }
       if (id == null) {
+        listadoEnVuelo?.ignore();
         setState(() {
           _error = 'Selecciona un estudiante en Perfil.';
           _cargando = false;
         });
         return;
       }
-      final items = await sl<IncidenciasApi>().listar(id);
+      final List<IncidenciaResumen> items;
+      if (listadoEnVuelo != null && id == idConocido) {
+        items = await listadoEnVuelo;
+      } else {
+        listadoEnVuelo?.ignore();
+        items = await _pedirListado(id, forzar: forzar);
+      }
+      if (!mounted) return;
       setState(() {
         _items = items;
         _estudianteId = id;
@@ -166,10 +174,23 @@ class _IncidenciasPageState extends State<IncidenciasPage>
     }
   }
 
+  Future<List<IncidenciaResumen>> _pedirListado(
+    int estudianteId, {
+    bool forzar = false,
+  }) async {
+    final guardado = _listadosEnMemoria[estudianteId];
+    if (!forzar && guardado != null && guardado.vigente) {
+      return guardado.items;
+    }
+    final items = await sl<IncidenciasApi>().listar(estudianteId);
+    _listadosEnMemoria[estudianteId] = _ListadoCacheado(items);
+    return items;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.fondo,
+      backgroundColor: context.asis.fondo,
       body: Stack(
         children: [
           const FondoAsiscole(estilo: FondoEstilo.incidencias),
@@ -183,7 +204,7 @@ class _IncidenciasPageState extends State<IncidenciasPage>
                     'Incidencias',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: AppTheme.texto,
+                          color: context.asis.texto,
                         ),
                   ),
                 ),
@@ -196,16 +217,9 @@ class _IncidenciasPageState extends State<IncidenciasPage>
                       onCambiar: () => unawaited(_cambiarHijoDesdeChip()),
                     ),
                   ),
-                if (!_citacionActiva)
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: _ChipCitacionDeshabilitada(),
-                  ),
                 Expanded(
                   child: _cargando
-                      ? const PantallaCargaAsiscole(
-                          mensaje: 'Cargando incidencias…',
-                        )
+                      ? const _ListadoFantasma()
                       : _error != null
                           ? Center(
                               child: Padding(
@@ -216,14 +230,15 @@ class _IncidenciasPageState extends State<IncidenciasPage>
                                     Text(
                                       _error!,
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: AppTheme.texto,
+                                      style: TextStyle(
+                                        color: context.asis.texto,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                     const SizedBox(height: 16),
                                     FilledButton(
-                                      onPressed: _cargar,
+                                      onPressed: () =>
+                                          unawaited(_cargar(forzar: true)),
                                       child: const Text('Reintentar'),
                                     ),
                                   ],
@@ -231,7 +246,7 @@ class _IncidenciasPageState extends State<IncidenciasPage>
                               ),
                             )
                           : RefreshIndicator(
-                              onRefresh: _cargar,
+                              onRefresh: () => _cargar(forzar: true),
                               child: _items!.isEmpty
                                   ? ListView(
                                       children: const [
@@ -272,6 +287,7 @@ class _IncidenciasPageState extends State<IncidenciasPage>
 
   Future<void> _detalle(IncidenciaResumen it) async {
     await mostrarSheetSeccion(
+      isScrollControlled: true,
       builder: (ctx) => _DetalleIncidenciaSheet(
         item: it,
         estudianteId: _estudianteId,
@@ -288,34 +304,57 @@ class _IncidenciasPageState extends State<IncidenciasPage>
   }
 }
 
-class _ChipCitacionDeshabilitada extends StatelessWidget {
-  const _ChipCitacionDeshabilitada();
+class _ListadoCacheado {
+  _ListadoCacheado(this.items) : _guardadoEn = DateTime.now();
+
+  static const _ttl = Duration(seconds: 45);
+
+  final List<IncidenciaResumen> items;
+  final DateTime _guardadoEn;
+
+  bool get vigente => DateTime.now().difference(_guardadoEn) < _ttl;
+}
+
+/// Tarjetas en gris mientras llega el listado: mantiene el sitio de la lista
+/// en lugar de vaciar la pantalla con un spinner.
+class _ListadoFantasma extends StatelessWidget {
+  const _ListadoFantasma();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.borde.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.borde),
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.event_busy, size: 18, color: AppTheme.textoSecundario),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Citaciones — próximamente (deshabilitado)',
-              style: TextStyle(
-                color: AppTheme.textoSecundario,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: 4,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (_, _) => Container(
+        height: 96,
+        decoration: BoxDecoration(
+          color: context.asis.superficie,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: context.asis.borde),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 170,
+              height: 12,
+              decoration: BoxDecoration(
+                color: context.asis.borde,
+                borderRadius: BorderRadius.circular(6),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Container(
+              height: 12,
+              decoration: BoxDecoration(
+                color: context.asis.borde,
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -394,119 +433,187 @@ class _DetalleIncidenciaSheetState extends State<_DetalleIncidenciaSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final altoMaximo = MediaQuery.sizeOf(context).height * 0.85;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppTheme.borde,
-                  borderRadius: BorderRadius.circular(4),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: altoMaximo),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: context.asis.borde,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _item.falta,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      color: AppTheme.texto,
-                    ),
-                  ),
-                ),
-                if (_item.esGrave)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppTheme.moradoClaro.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'Grave',
-                      style: TextStyle(
-                        color: AppTheme.moradoPrincipal,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  )
-                else
-                  const Icon(Icons.check_circle, color: AppTheme.celeste),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Categoría: ${_item.categoria}',
-              style: const TextStyle(color: AppTheme.textoSecundario),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Reportado por: ${_item.reportadoPor}',
-              style: const TextStyle(color: AppTheme.textoSecundario),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Fecha: ${_item.fecha}',
-              style: const TextStyle(color: AppTheme.textoSecundario),
-            ),
-            const SizedBox(height: 16),
-            if (_item.confirmada)
-              const Row(
-                children: [
-                  Icon(Icons.verified, color: AppTheme.celeste),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Ya confirmaste que recibiste esta incidencia',
-                      style: TextStyle(
-                        color: AppTheme.texto,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            else
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _enviando ? null : _confirmar,
-                  icon: _enviando
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+              const SizedBox(height: 16),
+              Flexible(
+                fit: FlexFit.loose,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _item.falta,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 18,
+                                color: context.asis.texto,
+                              ),
+                            ),
                           ),
-                        )
-                      : const Icon(Icons.mark_email_read_outlined),
-                  label: const Text('Confirmar que recibí esta incidencia'),
+                          if (_item.esGrave)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: context.asis.moradoClaro
+                                    .withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Grave',
+                                style: TextStyle(
+                                  color: context.asis.morado,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            )
+                          else
+                            Icon(
+                              Icons.check_circle,
+                              color: context.asis.celeste,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Categoría: ${_item.categoria}',
+                        style: TextStyle(color: context.asis.textoSecundario),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Reportado por: ${_item.reportadoPor}',
+                        style: TextStyle(color: context.asis.textoSecundario),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Fecha: ${_item.fecha}',
+                        style: TextStyle(color: context.asis.textoSecundario),
+                      ),
+                      if (_item.observaciones.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        _BloqueObservaciones(texto: _item.observaciones),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-            if (_error != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                _error!,
-                style: const TextStyle(
-                  color: Color(0xFF991B1B),
-                  fontWeight: FontWeight.w600,
+              const SizedBox(height: 16),
+              if (_item.confirmada)
+                Row(
+                  children: [
+                    Icon(Icons.verified, color: context.asis.celeste),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Ya confirmaste que recibiste esta incidencia',
+                        style: TextStyle(
+                          color: context.asis.texto,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _enviando ? null : _confirmar,
+                    icon: _enviando
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: context.asis.sobreMorado,
+                            ),
+                          )
+                        : const Icon(Icons.mark_email_read_outlined),
+                    label: const Text('Confirmar que recibí esta incidencia'),
+                  ),
                 ),
-              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    color: Color(0xFF991B1B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Observaciones del auxiliar. El scroll lo hace el sheet, no este bloque:
+/// un NestedScrollView interno empujaba el botón de confirmar fuera de vista.
+class _BloqueObservaciones extends StatelessWidget {
+  const _BloqueObservaciones({required this.texto});
+
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.asis.moradoClaro.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.asis.borde),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Observaciones del colegio',
+            style: TextStyle(
+              color: context.asis.texto,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            texto,
+            style: TextStyle(
+              color: context.asis.texto,
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -530,7 +637,7 @@ class _CardIncidencia extends StatelessWidget {
     final dia = fecha != null ? '${fecha.day}' : '—';
 
     return Material(
-      color: AppTheme.blanco,
+      color: context.asis.superficie,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
@@ -541,8 +648,8 @@ class _CardIncidencia extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: item.confirmada
-                  ? AppTheme.celeste.withValues(alpha: 0.5)
-                  : AppTheme.borde,
+                  ? context.asis.celeste.withValues(alpha: 0.5)
+                  : context.asis.borde,
             ),
           ),
           child: Row(
@@ -553,16 +660,16 @@ class _CardIncidencia extends StatelessWidget {
                   children: [
                     Text(
                       mes,
-                      style: const TextStyle(
-                        color: AppTheme.moradoSecundario,
+                      style: TextStyle(
+                        color: context.asis.moradoSecundario,
                         fontWeight: FontWeight.w700,
                         fontSize: 11,
                       ),
                     ),
                     Text(
                       dia,
-                      style: const TextStyle(
-                        color: AppTheme.texto,
+                      style: TextStyle(
+                        color: context.asis.texto,
                         fontWeight: FontWeight.w800,
                         fontSize: 22,
                       ),
@@ -573,19 +680,19 @@ class _CardIncidencia extends StatelessWidget {
               Container(
                 width: 1,
                 height: 44,
-                color: AppTheme.borde,
+                color: context.asis.borde,
                 margin: const EdgeInsets.symmetric(horizontal: 10),
               ),
               Container(
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.moradoClaro.withValues(alpha: 0.18),
+                  color: context.asis.moradoClaro.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.report_outlined,
-                  color: AppTheme.moradoPrincipal,
+                  color: context.asis.morado,
                   size: 22,
                 ),
               ),
@@ -598,9 +705,9 @@ class _CardIncidencia extends StatelessWidget {
                       item.falta,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: AppTheme.texto,
+                        color: context.asis.texto,
                         fontSize: 15,
                       ),
                     ),
@@ -609,11 +716,25 @@ class _CardIncidencia extends StatelessWidget {
                       '${item.categoria} · ${item.reportadoPor}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppTheme.textoSecundario,
+                      style: TextStyle(
+                        color: context.asis.textoSecundario,
                         fontSize: 13,
                       ),
                     ),
+                    if (item.observaciones.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      // Adelanto: el texto completo está en el detalle.
+                      Text(
+                        item.observaciones,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: context.asis.textoSecundario,
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
                       item.confirmada
@@ -621,8 +742,8 @@ class _CardIncidencia extends StatelessWidget {
                           : 'Pendiente de confirmación',
                       style: TextStyle(
                         color: item.confirmada
-                            ? AppTheme.celeste
-                            : AppTheme.ambar,
+                            ? context.asis.celeste
+                            : context.asis.ambarIncidencia,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
@@ -649,10 +770,10 @@ class _CardIncidencia extends StatelessWidget {
                   ),
                 )
               else if (item.confirmada)
-                const Icon(Icons.verified, color: AppTheme.celeste, size: 22)
+                Icon(Icons.verified, color: context.asis.celeste, size: 22)
               else
-                const Icon(Icons.check_circle_outline,
-                    color: AppTheme.textoSecundario, size: 22),
+                Icon(Icons.check_circle_outline,
+                    color: context.asis.textoSecundario, size: 22),
             ],
           ),
         ),

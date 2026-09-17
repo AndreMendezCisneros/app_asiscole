@@ -21,6 +21,15 @@ class EstudianteVinculado {
   final String colegio;
   final bool activo;
 
+  EstudianteVinculado copyWith({bool? activo}) => EstudianteVinculado(
+        id: id,
+        nombre: nombre,
+        grado: grado,
+        seccion: seccion,
+        colegio: colegio,
+        activo: activo ?? this.activo,
+      );
+
   factory EstudianteVinculado.fromJson(Map<String, dynamic> json) =>
       EstudianteVinculado(
         id: (json['id'] as num).toInt(),
@@ -45,6 +54,16 @@ class PerfilRepository {
   /// Se incrementa al cambiar el estudiante activo para que otras pestañas
   /// (IndexedStack) recarguen sin ir a Perfil.
   final ValueNotifier<int> estudianteActivoEpoch = ValueNotifier(0);
+
+  /// Hijo activo según lo último que dijo el backend, sin salir a la red.
+  ///
+  /// Permite a una pantalla pedir sus datos a la vez que el perfil en lugar de
+  /// encadenar dos viajes. El valor solo se ensucia si cambió el hijo, y eso ya
+  /// se avisa por [estudianteActivoEpoch].
+  int? get estudianteActivoIdCacheado => _perfilCache?.estudianteActivoId;
+
+  /// Hijos ya conocidos, sin salir a la red. `null` si nunca se pidieron.
+  List<EstudianteVinculado>? get estudiantesCacheados => _estudiantesCache;
 
   void _avisarCambioEstudianteActivo() {
     estudianteActivoEpoch.value++;
@@ -106,8 +125,11 @@ class PerfilRepository {
       final perfil = Perfil.fromJson(resp.data!);
       _perfilCache = perfil;
       _perfilCacheEn = DateTime.now();
-      _estudiantesCache = null;
-      _estudiantesCacheEn = null;
+      // La lista de hijos no cambió, solo cuál está activo: invalidarla obligaba
+      // a repedirla en cada pestaña tras cambiar de hijo.
+      _estudiantesCache = _estudiantesCache
+          ?.map((e) => e.copyWith(activo: e.id == id))
+          .toList(growable: false);
       _avisarCambioEstudianteActivo();
       return perfil;
     } on DioException catch (e) {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/asis_colors.dart';
 
 /// Indicador compacto del estado de asistencia de un día.
 class DayStatusBadge extends StatelessWidget {
@@ -12,10 +12,10 @@ class DayStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (estado) {
-      'a_tiempo' => ('A tiempo', AppTheme.celeste),
-      'tarde' => ('Tarde', AppTheme.ambar),
-      'falta' => ('Falta', AppTheme.moradoPrincipal),
-      _ => ('Sin registro', AppTheme.textoSecundario),
+      'a_tiempo' => ('A tiempo', context.asis.celeste),
+      'tarde' => ('Tarde', context.asis.ambarIncidencia),
+      'falta' => ('Falta', context.asis.morado),
+      _ => ('Sin registro', context.asis.textoSecundario),
     };
 
     if (compacto) {

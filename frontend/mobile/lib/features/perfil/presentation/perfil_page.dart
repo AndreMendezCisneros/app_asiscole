@@ -5,7 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/injector.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/storage/local_db.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/asis_colors.dart';
+import '../../../core/theme/preferencia_tema.dart';
 import '../../../core/util/formato.dart';
 import '../../../core/widgets/asiscole_logo.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
@@ -27,6 +28,9 @@ class _PerfilPageState extends State<PerfilPage> {
   Perfil? _perfil;
   String? _error;
   bool _cargando = true;
+
+  /// Hijo cuyo cambio está en curso; evita toques repetidos sin feedback.
+  int? _cambiandoA;
 
   @override
   void initState() {
@@ -88,8 +92,19 @@ class _PerfilPageState extends State<PerfilPage> {
   }
 
   Future<void> _seleccionar(EstudianteVinculado e) async {
-    await sl<PerfilRepository>().seleccionarEstudiante(e.id);
-    await _cargar();
+    if (_cambiandoA != null || e.activo) return;
+    setState(() => _cambiandoA = e.id);
+    try {
+      await sl<PerfilRepository>().seleccionarEstudiante(e.id);
+      await _cargar();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo cambiar de hijo.')),
+      );
+    } finally {
+      if (mounted) setState(() => _cambiandoA = null);
+    }
   }
 
   String _telefonoEnmascarado(String? tel) {
@@ -205,7 +220,7 @@ class _PerfilPageState extends State<PerfilPage> {
   Widget build(BuildContext context) {
     final alias = (_perfil?.alias ?? '').trim();
     return Scaffold(
-      backgroundColor: AppTheme.fondo,
+      backgroundColor: context.asis.fondo,
       body: Stack(
         children: [
           const FondoAsiscole(estilo: FondoEstilo.perfil),
@@ -225,14 +240,14 @@ class _PerfilPageState extends State<PerfilPage> {
                       24,
                       32,
                     ),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          AppTheme.moradoPrincipal,
-                          AppTheme.moradoSecundario,
-                          AppTheme.moradoClaro,
+                          context.asis.morado,
+                          context.asis.moradoSecundario,
+                          context.asis.moradoClaro,
                         ],
                       ),
                       borderRadius: BorderRadius.vertical(
@@ -247,7 +262,7 @@ class _PerfilPageState extends State<PerfilPage> {
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const AsiscoleLogo(size: 64),
+                          child: const AsiscoleLogo(size: 64, conFondo: true),
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -279,27 +294,27 @@ class _PerfilPageState extends State<PerfilPage> {
                         titulo: 'Tu nombre',
                         children: [
                           ListTile(
-                            leading: const Icon(
+                            leading: Icon(
                               Icons.badge_outlined,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
                             title: Text(
                               alias.isEmpty ? 'Sin nombre' : alias,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: AppTheme.texto,
+                                color: context.asis.texto,
                               ),
                             ),
-                            subtitle: const Text(
+                            subtitle: Text(
                               'Cómo te mostramos en la app',
                               style: TextStyle(
-                                color: AppTheme.textoSecundario,
+                                color: context.asis.textoSecundario,
                                 fontSize: 12,
                               ),
                             ),
-                            trailing: const Icon(
+                            trailing: Icon(
                               Icons.edit_outlined,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
                             onTap: _editarAlias,
                           ),
@@ -310,12 +325,12 @@ class _PerfilPageState extends State<PerfilPage> {
                         titulo: 'Estudiantes vinculados',
                         children: [
                           if (_hijos.isEmpty)
-                            const Padding(
+                            Padding(
                               padding: EdgeInsets.all(12),
                               child: Text(
                                 'No hay estudiantes vinculados',
                                 style: TextStyle(
-                                  color: AppTheme.textoSecundario,
+                                  color: context.asis.textoSecundario,
                                 ),
                               ),
                             )
@@ -327,27 +342,35 @@ class _PerfilPageState extends State<PerfilPage> {
                                 ),
                                 title: Text(
                                   e.nombre,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: AppTheme.texto,
+                                    color: context.asis.texto,
                                   ),
                                 ),
                                 subtitle: Text(
                                   '${e.grado} ${e.seccion} · ${e.colegio}',
-                                  style: const TextStyle(
-                                    color: AppTheme.textoSecundario,
+                                  style: TextStyle(
+                                    color: context.asis.textoSecundario,
                                   ),
                                 ),
-                                trailing: e.activo
-                                    ? const Icon(
-                                        Icons.check_circle,
-                                        color: AppTheme.celeste,
+                                trailing: _cambiandoA == e.id
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.2,
+                                        ),
                                       )
-                                    : Icon(
-                                        Icons.chevron_right,
-                                        color: AppTheme.moradoSecundario
-                                            .withValues(alpha: 0.7),
-                                      ),
+                                    : e.activo
+                                        ? Icon(
+                                            Icons.check_circle,
+                                            color: context.asis.celeste,
+                                          )
+                                        : Icon(
+                                            Icons.chevron_right,
+                                            color: context.asis.moradoSecundario
+                                                .withValues(alpha: 0.7),
+                                          ),
                                 onTap: () => _seleccionar(e),
                               ),
                             ),
@@ -355,32 +378,37 @@ class _PerfilPageState extends State<PerfilPage> {
                       ),
                       const SizedBox(height: 14),
                       _CardGrupo(
+                        titulo: 'Apariencia',
+                        children: [_SelectorTema()],
+                      ),
+                      const SizedBox(height: 14),
+                      _CardGrupo(
                         titulo: 'Legal',
                         children: [
                           ListTile(
-                            leading: const Icon(
+                            leading: Icon(
                               Icons.gavel_outlined,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
-                            title: const Text(
+                            title: Text(
                               'Términos y condiciones',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: AppTheme.texto,
+                                color: context.asis.texto,
                               ),
                             ),
                             subtitle: Text(
                               _perfil?.terminosVersion == null
                                   ? 'Leer el documento'
                                   : 'Versión ${_perfil!.terminosVersion}',
-                              style: const TextStyle(
-                                color: AppTheme.textoSecundario,
+                              style: TextStyle(
+                                color: context.asis.textoSecundario,
                                 fontSize: 12,
                               ),
                             ),
-                            trailing: const Icon(
+                            trailing: Icon(
                               Icons.chevron_right,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
                             onTap: () => context.push(
                               Rutas.terminos,
@@ -394,27 +422,27 @@ class _PerfilPageState extends State<PerfilPage> {
                         titulo: 'Ayuda',
                         children: [
                           ListTile(
-                            leading: const Icon(
+                            leading: Icon(
                               Icons.menu_book_outlined,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
-                            title: const Text(
+                            title: Text(
                               'Guía de uso',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: AppTheme.texto,
+                                color: context.asis.texto,
                               ),
                             ),
-                            subtitle: const Text(
+                            subtitle: Text(
                               'Ver de nuevo los tips de cada sección',
                               style: TextStyle(
-                                color: AppTheme.textoSecundario,
+                                color: context.asis.textoSecundario,
                                 fontSize: 12,
                               ),
                             ),
-                            trailing: const Icon(
+                            trailing: Icon(
                               Icons.chevron_right,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
                             onTap: _verGuiaDeNuevo,
                           ),
@@ -425,46 +453,46 @@ class _PerfilPageState extends State<PerfilPage> {
                         titulo: 'Cuenta',
                         children: [
                           ListTile(
-                            leading: const Icon(
+                            leading: Icon(
                               Icons.logout,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
-                            title: const Text(
+                            title: Text(
                               'Cerrar sesión',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: AppTheme.texto,
+                                color: context.asis.texto,
                               ),
                             ),
-                            trailing: const Icon(
+                            trailing: Icon(
                               Icons.chevron_right,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
                             onTap: _confirmarCerrarSesion,
                           ),
                           const Divider(height: 1),
                           ListTile(
-                            leading: const Icon(
+                            leading: Icon(
                               Icons.cleaning_services_outlined,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
-                            title: const Text(
+                            title: Text(
                               'Borrar mensajes guardados en este teléfono',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: AppTheme.texto,
+                                color: context.asis.texto,
                               ),
                             ),
-                            subtitle: const Text(
+                            subtitle: Text(
                               'Borra la copia local; no afecta al colegio',
                               style: TextStyle(
-                                color: AppTheme.textoSecundario,
+                                color: context.asis.textoSecundario,
                                 fontSize: 12,
                               ),
                             ),
-                            trailing: const Icon(
+                            trailing: Icon(
                               Icons.chevron_right,
-                              color: AppTheme.moradoSecundario,
+                              color: context.asis.moradoSecundario,
                             ),
                             onTap: _borrarMensajesGuardados,
                           ),
@@ -588,16 +616,16 @@ class _ConfirmarDocumentoDialogState extends State<_ConfirmarDocumentoDialog> {
               style: TextStyle(fontWeight: FontWeight.w700, color: error),
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Dejarás de recibir los avisos del colegio en este teléfono.\n'
               'Se cerrará tu sesión y se borrarán los mensajes guardados.\n'
               'Para volver a recibirlos tendrás que registrarte de nuevo.',
-              style: TextStyle(color: AppTheme.textoSecundario, height: 1.4),
+              style: TextStyle(color: context.asis.textoSecundario, height: 1.4),
             ),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'El expediente del estudiante en el colegio no se modifica.',
-              style: TextStyle(color: AppTheme.textoSecundario, fontSize: 12),
+              style: TextStyle(color: context.asis.textoSecundario, fontSize: 12),
             ),
             const SizedBox(height: 18),
             TextField(
@@ -626,6 +654,58 @@ class _ConfirmarDocumentoDialogState extends State<_ConfirmarDocumentoDialog> {
   }
 }
 
+/// Tres opciones de tema. Automático sigue al sistema y es el valor de fábrica.
+class _SelectorTema extends StatelessWidget {
+  static const _opciones = <(ThemeMode, IconData, String, String)>[
+    (
+      ThemeMode.system,
+      Icons.brightness_auto_outlined,
+      'Automático',
+      'Igual que el teléfono',
+    ),
+    (ThemeMode.light, Icons.light_mode_outlined, 'Claro', ''),
+    (ThemeMode.dark, Icons.dark_mode_outlined, 'Oscuro', ''),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final preferencia = sl<PreferenciaTema>();
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: preferencia.modo,
+      builder: (context, actual, _) => Column(
+        children: [
+          for (final (modo, icono, titulo, detalle) in _opciones) ...[
+            if (modo != _opciones.first.$1) const Divider(height: 1),
+            ListTile(
+              leading: Icon(icono, color: context.asis.moradoSecundario),
+              title: Text(
+                titulo,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: context.asis.texto,
+                ),
+              ),
+              subtitle: detalle.isEmpty
+                  ? null
+                  : Text(
+                      detalle,
+                      style: TextStyle(
+                        color: context.asis.textoSecundario,
+                        fontSize: 12,
+                      ),
+                    ),
+              trailing: modo == actual
+                  ? Icon(Icons.check_circle, color: context.asis.celeste)
+                  : null,
+              onTap: () => preferencia.cambiar(modo),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _CardGrupo extends StatelessWidget {
   const _CardGrupo({required this.titulo, required this.children});
 
@@ -641,8 +721,8 @@ class _CardGrupo extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
             titulo,
-            style: const TextStyle(
-              color: AppTheme.texto,
+            style: TextStyle(
+              color: context.asis.texto,
               fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
@@ -650,9 +730,9 @@ class _CardGrupo extends StatelessWidget {
         ),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.blanco,
+            color: context.asis.superficie,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppTheme.borde),
+            border: Border.all(color: context.asis.borde),
           ),
           child: Column(children: children),
         ),

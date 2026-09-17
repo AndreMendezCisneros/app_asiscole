@@ -21,17 +21,20 @@ class AuthRepository {
     required InfoDispositivo dispositivo,
     Future<String?> Function()? obtenerPushToken,
     Future<void> Function()? borrarCacheMensajes,
+    Future<void> Function()? revocarPushToken,
   })  : _api = api,
         _almacen = almacen,
         _dispositivo = dispositivo,
         _obtenerPushToken = obtenerPushToken,
-        _borrarCacheMensajes = borrarCacheMensajes;
+        _borrarCacheMensajes = borrarCacheMensajes,
+        _revocarPushToken = revocarPushToken;
 
   final AuthApi _api;
   final SessionStorage _almacen;
   final InfoDispositivo _dispositivo;
   final Future<String?> Function()? _obtenerPushToken;
   final Future<void> Function()? _borrarCacheMensajes;
+  final Future<void> Function()? _revocarPushToken;
 
   Future<Sesion> login({
     required String telefono,
@@ -123,14 +126,27 @@ class AuthRepository {
   /// La caché guarda el nombre del estudiante y el texto de los avisos, así que
   /// no debe sobrevivir al cierre de sesión: el teléfono puede ser compartido y
   /// la eliminación de cuenta pasa por aquí (Ley N.º 29733, minimización).
+  ///
+  /// El token de push se revoca en el dispositivo aunque el backend no responda:
+  /// si solo confiáramos en `logout`, un cierre sin red dejaría llegando avisos
+  /// que el apoderado ya no puede abrir.
   Future<void> cerrarSesion() async {
     try {
       await _api.logout();
     } on DioException {
       // Aunque el backend no responda, la sesión local se cierra igual.
     } finally {
+      await _revocarPush();
       await _almacen.limpiarTokens();
       await _borrarCache();
+    }
+  }
+
+  Future<void> _revocarPush() async {
+    try {
+      await _revocarPushToken?.call();
+    } on Object {
+      // Push es oportunista: no puede impedir cerrar la sesión.
     }
   }
 

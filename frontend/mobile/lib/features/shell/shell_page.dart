@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/config/feature_flags.dart';
 import '../../core/di/injector.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/asis_colors.dart';
 import '../auth/presentation/auth_cubit.dart';
 import '../auth/presentation/auth_state.dart';
 
@@ -53,19 +53,19 @@ class _ShellPageState extends State<ShellPage> {
     ),
   ];
 
-  static const _sombraNav = [
-    BoxShadow(
-      color: Color(0x140F172A),
-      blurRadius: 18,
-      offset: Offset(0, 6),
-    ),
-  ];
-  static final _decoNav = BoxDecoration(
-    color: AppTheme.blanco,
-    borderRadius: BorderRadius.circular(28),
-    border: const Border.fromBorderSide(BorderSide(color: AppTheme.borde)),
-    boxShadow: _sombraNav,
-  );
+  /// La barra flotante depende del brillo, así que se arma con el contexto.
+  static BoxDecoration _decoNav(BuildContext context) => BoxDecoration(
+        color: context.asis.superficie,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.fromBorderSide(BorderSide(color: context.asis.borde)),
+        boxShadow: [
+          BoxShadow(
+            color: context.asis.sombraNav,
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      );
 
   @override
   void initState() {
@@ -99,12 +99,12 @@ class _ShellPageState extends State<ShellPage> {
           });
         }
         return Scaffold(
-          backgroundColor: AppTheme.fondo,
+          backgroundColor: context.asis.fondo,
           body: Column(
             children: [
               if (soloMensajes)
                 Material(
-                  color: const Color(0xFFFFF3CD),
+                  color: context.asis.avisoFondo,
                   child: SafeArea(
                     bottom: false,
                     child: Padding(
@@ -114,10 +114,10 @@ class _ShellPageState extends State<ShellPage> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.wifi_off,
                             size: 18,
-                            color: Color(0xFF856404),
+                            color: context.asis.avisoTexto,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -125,7 +125,7 @@ class _ShellPageState extends State<ShellPage> {
                               'Sin conexión — solo mensajes guardados',
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
-                                color: const Color(0xFF856404),
+                                color: context.asis.avisoTexto,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -142,7 +142,7 @@ class _ShellPageState extends State<ShellPage> {
             minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-              decoration: _decoNav,
+              decoration: _decoNav(context),
               child: ValueListenableBuilder<bool>(
                 valueListenable: sl<FeatureFlags>().notas,
                 builder: (context, notasActivas, _) {
@@ -225,10 +225,10 @@ class _ItemNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = !habilitado
-        ? AppTheme.textoSecundario.withValues(alpha: 0.35)
+        ? context.asis.textoSecundario.withValues(alpha: 0.35)
         : activo
-            ? AppTheme.moradoPrincipal
-            : AppTheme.textoSecundario;
+            ? context.asis.morado
+            : context.asis.textoSecundario;
     return Material(
       color: Colors.transparent,
       child: InkWell(

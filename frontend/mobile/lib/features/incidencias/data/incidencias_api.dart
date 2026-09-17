@@ -10,6 +10,7 @@ class IncidenciaResumen {
     required this.falta,
     required this.esGrave,
     required this.reportadoPor,
+    this.observaciones = '',
     this.confirmada = false,
     this.confirmadaEn,
   });
@@ -20,6 +21,12 @@ class IncidenciaResumen {
   final String falta;
   final bool esGrave;
   final String reportadoPor;
+
+  /// Lo que escribió el auxiliar al registrar la falta. Vacío si no puso nada.
+  ///
+  /// Un backend anterior no manda la clave; entonces queda vacía y el detalle
+  /// simplemente no muestra el bloque.
+  final String observaciones;
   final bool confirmada;
   final String? confirmadaEn;
 
@@ -31,6 +38,7 @@ class IncidenciaResumen {
       falta: falta,
       esGrave: esGrave,
       reportadoPor: reportadoPor,
+      observaciones: observaciones,
       confirmada: confirmada ?? this.confirmada,
       confirmadaEn: confirmadaEn ?? this.confirmadaEn,
     );
@@ -44,6 +52,7 @@ class IncidenciaResumen {
         falta: json['falta'] as String,
         esGrave: json['es_grave'] as bool? ?? false,
         reportadoPor: json['reportado_por'] as String? ?? '',
+        observaciones: (json['observaciones'] as String? ?? '').trim(),
         confirmada: json['confirmada'] as bool? ?? false,
         confirmadaEn: json['confirmada_en'] as String?,
       );

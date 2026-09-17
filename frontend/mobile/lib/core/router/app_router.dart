@@ -17,10 +17,13 @@ import '../../features/mensajes/presentation/mensajes_page.dart';
 import '../../features/notas/presentation/notas_page.dart';
 import '../../features/perfil/presentation/perfil_page.dart';
 import '../../features/shell/shell_page.dart';
+import '../../features/sistema/arranque_page.dart';
 
 class Rutas {
   const Rutas._();
 
+  /// Primer frame de la app, mientras se restaura la sesión guardada.
+  static const String arranque = '/';
   static const String login = '/login';
   static const String sesionDenegada = '/sesion-denegada';
   static const String esperandoAprobacion = '/esperando-aprobacion';
@@ -38,11 +41,12 @@ class Rutas {
 GoRouter crearRouter(AuthCubit auth, {GlobalKey<NavigatorState>? navigatorKey}) {
   return GoRouter(
     navigatorKey: navigatorKey,
-    initialLocation: Rutas.login,
+    initialLocation: Rutas.arranque,
     debugLogDiagnostics: false,
     refreshListenable: _EscuchaDeEstado(auth.stream),
     redirect: (context, estado) => _destino(auth.state, estado.matchedLocation),
     routes: [
+      GoRoute(path: Rutas.arranque, builder: (_, _) => const ArranquePage()),
       GoRoute(path: Rutas.login, builder: (_, _) => const LoginPage()),
       GoRoute(
         path: Rutas.terminos,
@@ -122,7 +126,12 @@ GoRouter crearRouter(AuthCubit auth, {GlobalKey<NavigatorState>? navigatorKey}) 
 }
 
 String? _destino(AuthState auth, String actual) {
-  if (auth is Authenticating) return null;
+  // Restaurando la sesión guardada: se espera en la pantalla de arranque para
+  // no enseñar el login un instante a quien ya tiene sesión.
+  if (auth is Authenticating) {
+    if (!auth.restaurando) return null;
+    return actual == Rutas.arranque ? null : Rutas.arranque;
+  }
 
   // Términos legibles sin sesión (desde login) o con sesión (desde perfil).
   if (actual == Rutas.terminos) return null;

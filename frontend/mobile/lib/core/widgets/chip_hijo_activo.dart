@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/asis_colors.dart';
 
 /// Chip que indica qué hijo se está consultando.
 class ChipHijoActivo extends StatelessWidget {
@@ -22,7 +22,7 @@ class ChipHijoActivo extends StatelessWidget {
         ? 'Viendo a $nombre'
         : 'Viendo a $nombre · $detalle';
     return Material(
-      color: AppTheme.blanco,
+      color: context.asis.superficie,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onCambiar,
@@ -31,21 +31,21 @@ class ChipHijoActivo extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.borde),
+            border: Border.all(color: context.asis.borde),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.face_retouching_natural,
-                  size: 18, color: AppTheme.moradoPrincipal),
+              Icon(Icons.face_retouching_natural,
+                  size: 18, color: context.asis.morado),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
                   texto,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppTheme.texto,
+                  style: TextStyle(
+                    color: context.asis.texto,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
@@ -53,8 +53,8 @@ class ChipHijoActivo extends StatelessWidget {
               ),
               if (onCambiar != null) ...[
                 const SizedBox(width: 4),
-                const Icon(Icons.swap_horiz,
-                    size: 18, color: AppTheme.moradoSecundario),
+                Icon(Icons.swap_horiz,
+                    size: 18, color: context.asis.moradoSecundario),
               ],
             ],
           ),
@@ -98,7 +98,7 @@ mixin CierraSheetAlCambiarTab<T extends StatefulWidget> on State<T> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: isScrollControlled,
-      backgroundColor: backgroundColor ?? AppTheme.fondo,
+      backgroundColor: backgroundColor ?? context.asis.fondo,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),

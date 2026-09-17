@@ -1,6 +1,6 @@
 # Estado de producción — Canal Asiscole Messenger
 
-Actualizado: **2026-09-13**.
+Actualizado: **2026-09-16**.
 
 Documento de verdad operativa: qué está desplegado, qué APK distribuir y qué
 lecciones no repetir. Complementa [`deploy-vps.md`](deploy-vps.md).
@@ -119,6 +119,26 @@ Los apoderados con APK/sesión antigua deben **cerrar sesión o borrar datos de 
 app** e iniciar sesión de nuevo. No basta con reinstalar encima si queda el
 Keystore local.
 
+### Versión 1.1.0+3 (arranque, notificaciones y modo oscuro)
+
+Sube desde `1.0.1+2` con el **mismo keystore**
+(`android/keystore/asiscole-release.jks`, huella SHA-256
+`97ac452f…3ce1`), así que se instala encima sin desinstalar.
+
+Cambios que el apoderado nota: arranque con splash de marca en vez de espera en
+blanco, Asistencias e Incidencias con esqueleto parcial y caché por hijo y mes,
+cambio de hijo inmediato, observaciones del auxiliar dentro de la incidencia,
+filtro **Citaciones** y agrupación por día en la bandeja, Notas visible sin
+conexión, y modo oscuro con selector en Perfil (por defecto sigue al sistema).
+
+**Pendiente asociado — sonido propio.** La app crea el canal
+`asiscole_avisos_v4` con el audio `res/raw/asis_aviso.wav`, pero el servidor
+sigue enviando `FCM_ANDROID_CHANNEL_ID=asiscole_avisos_v3` y la app crea también
+ese canal. Android no deja cambiarle el sonido a un canal ya creado, de ahí la
+versión nueva. El cambio de la variable en el VPS **solo se hace cuando ya nadie
+use 1.0.1+2** (o cuando se suba `min_soportada`): antes de eso, un push al canal
+`v4` no se mostraría en los teléfonos que no han actualizado.
+
 ### Robustez post-incidente (código app)
 
 - No bajar a “offline” solo por `connectivity_plus` (falsos negativos en MIUI).
@@ -141,6 +161,23 @@ docker compose -f docker-compose.prod.yml ps
 
 En la app: login → bandeja → `PUT /perfil/push-token` 204 → avisos FCM.
 
+### Tokens de push huérfanos
+
+Quien cerró sesión sin red dejó su token activo en la central y seguía
+recibiendo avisos que no podía abrir. Se limpian desde el servidor, sin depender
+de que el apoderado actualice:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend \
+  python manage.py purgar_push_huerfanos --dry-run   # cuenta
+docker compose -f docker-compose.prod.yml exec backend \
+  python manage.py purgar_push_huerfanos             # desactiva
+```
+
+Es idempotente y solo registra conteos. Desde 1.1.0 la app además borra el token
+del dispositivo al cerrar sesión aunque el `POST /auth/logout` falle, y el envío
+de push da de baja los tokens que FCM declara inválidos.
+
 ---
 
 ## 6. Colegios conectados
@@ -153,6 +190,12 @@ El canal habla con **BD central + N BDs de colegio** (`SCHOOL_DATABASES`).
 | `asis_academy` | Ingesta HTTP vía `demostracion.asisacademy.com/canal-api`. Un `202` con `creados: 0` significa sin destinatario en directorio, no fallo de red. Agenda: solo el domingo no lectivo. |
 
 Calendario de agenda (fin de semana + arranque JP 2026-09-07) desplegado al VPS el **2026-09-13**.
+
+Desplegado el **2026-09-16** (rebuild de `backend`, `worker` y `beat`): `observaciones`
+en el listado de incidencias, baja de los tokens que FCM rechaza y el comando
+`purgar_push_huerfanos` (primera pasada: 1 token desactivado). La imagen **copia**
+el código (`build: ./backend`), así que un `up -d --force-recreate` sin `build`
+no aplica nada.
 
 Ingesta acepta `entrada` \| `salida` \| `incidencia` \| `aviso`.
 

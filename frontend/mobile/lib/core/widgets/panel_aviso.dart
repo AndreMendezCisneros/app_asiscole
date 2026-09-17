@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/asis_colors.dart';
 
 enum TonoAviso { informacion, advertencia, error, exito }
 
@@ -23,8 +23,8 @@ class PanelAviso extends StatelessWidget {
   Widget build(BuildContext context) {
     final (Color fondo, Color acento, IconData iconoPorDefecto) = switch (tono) {
       TonoAviso.informacion => (
-          AppTheme.moradoClaro.withValues(alpha: 0.15),
-          AppTheme.moradoPrincipal,
+          context.asis.moradoClaro.withValues(alpha: 0.15),
+          context.asis.morado,
           Icons.info_outline,
         ),
       TonoAviso.advertencia => (
@@ -38,14 +38,14 @@ class PanelAviso extends StatelessWidget {
           Icons.error_outline,
         ),
       TonoAviso.exito => (
-          AppTheme.celeste.withValues(alpha: 0.15),
+          context.asis.celeste.withValues(alpha: 0.15),
           const Color(0xFF0E7490),
           Icons.check_circle_outline,
         ),
     };
 
     // Texto siempre oscuro para legibilidad sobre fondos claros/decorativos.
-    const Color textoCuerpo = AppTheme.texto;
+    Color textoCuerpo = context.asis.texto;
 
     return Container(
       width: double.infinity,
@@ -53,7 +53,7 @@ class PanelAviso extends StatelessWidget {
       decoration: BoxDecoration(
         color: fondo,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borde),
+        border: Border.all(color: context.asis.borde),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

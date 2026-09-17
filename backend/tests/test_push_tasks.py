@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
@@ -14,15 +14,19 @@ from apps.mensajeria.tasks import enviar_push_mensaje, reintentar_push_pendiente
 @dataclass
 class _ResultadoFake:
     hubo_entrega: bool = True
+    tokens_invalidos: list[str] = field(default_factory=list)
 
 
 class _PushFake:
-    def __init__(self):
+    """Transporte de prueba. `invalidos` imita los tokens que FCM rechaza."""
+
+    def __init__(self, invalidos: list[str] | None = None):
         self.llamadas = 0
+        self._invalidos = invalidos or []
 
     def enviar(self, tokens, carga):
         self.llamadas += 1
-        return _ResultadoFake(hubo_entrega=True)
+        return _ResultadoFake(hubo_entrega=True, tokens_invalidos=self._invalidos)
 
 
 @pytest.mark.django_db
@@ -80,3 +84,30 @@ def test_reintentar_push_pendientes(monkeypatch):
     enviados = reintentar_push_pendientes(apo)
     assert enviados == 1
     assert fake.llamadas == 1
+
+
+@pytest.mark.django_db
+def test_token_rechazado_por_el_proveedor_queda_desactivado(monkeypatch):
+    """Si el dispositivo borro su token, FCM lo declara muerto y aqui se baja."""
+    apo = Apoderado.objects.create(telefono="+51988880003")
+    token = PushToken.objects.create(
+        apoderado=apo,
+        device_id="dev-3",
+        token="fake-fcm-token-3",
+        plataforma="android",
+        activo=True,
+    )
+    mensaje = Mensaje.objects.create(
+        apoderado=apo,
+        tenant_id="jean_piaget",
+        tipo=TIPO_ENTRADA,
+        texto="Entrada registrada",
+        entregado=False,
+    )
+    fake = _PushFake(invalidos=["fake-fcm-token-3"])
+    monkeypatch.setattr("apps.mensajeria.tasks.ServicioPush", lambda: fake)
+
+    enviar_push_mensaje(str(mensaje.pk))
+
+    token.refresh_from_db()
+    assert token.activo is False

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../config/env.dart';
 import '../error/api_error.dart';
 import '../storage/token_store.dart';
+import '../version/version_instalada.dart';
 import 'auth_interceptor.dart';
 
 /// Cliente HTTP de la app. Todas las llamadas pasan por aquí.
@@ -15,7 +16,6 @@ class ApiClient {
     required RefrescarDatos refrescar,
     void Function(ApiError motivo)? alInvalidarSesion,
     String? baseUrl,
-    String versionCode = '',
     Dio? dio,
   }) {
     _dio = dio ??
@@ -30,9 +30,7 @@ class ApiClient {
           ),
         );
 
-    if (versionCode.isNotEmpty) {
-      _dio.interceptors.add(_CabeceraVersion(versionCode));
-    }
+    _dio.interceptors.add(_CabeceraVersion());
 
     _dio.interceptors.add(
       AuthInterceptor(
@@ -57,14 +55,15 @@ class ApiClient {
 
 /// El servidor decide si hay que actualizar comparando este entero con
 /// `min_soportada`. Va en todas las peticiones, no solo en `/sistema/version-app`.
+///
+/// Se lee del holder en cada petición porque el `versionCode` se resuelve
+/// después del primer frame; mientras no esté, la cabecera se omite y el
+/// backend no bloquea por ello.
 class _CabeceraVersion extends Interceptor {
-  _CabeceraVersion(this._versionCode);
-
-  final String _versionCode;
-
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    options.headers['X-App-Version'] = _versionCode;
+    final codigo = VersionInstalada.codigo;
+    if (codigo.isNotEmpty) options.headers['X-App-Version'] = codigo;
     handler.next(options);
   }
 }

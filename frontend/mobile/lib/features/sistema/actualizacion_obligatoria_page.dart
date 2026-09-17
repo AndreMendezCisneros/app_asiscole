@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/config/env.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/asis_colors.dart';
 import '../../../core/version/actualizador_app.dart';
 import '../../../core/version/version_app_api.dart';
 import '../../../core/widgets/asiscole_logo.dart';
@@ -49,7 +49,7 @@ class _ActualizacionObligatoriaPageState
         : widget.politica.mensaje!;
 
     return Scaffold(
-      backgroundColor: AppTheme.fondo,
+      backgroundColor: context.asis.fondo,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(28, 48, 28, 28),
@@ -57,23 +57,23 @@ class _ActualizacionObligatoriaPageState
             children: [
               const AsiscoleLogo(size: 72),
               const SizedBox(height: 28),
-              const Text(
+              Text(
                 'Actualización necesaria',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
-                  color: AppTheme.texto,
+                  color: context.asis.texto,
                 ),
               ),
               const SizedBox(height: 12),
               Text(
                 mensaje,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   height: 1.45,
-                  color: AppTheme.textoSecundario,
+                  color: context.asis.textoSecundario,
                 ),
               ),
               const Spacer(),
@@ -83,7 +83,7 @@ class _ActualizacionObligatoriaPageState
                 child: FilledButton(
                   onPressed: _trabajando ? null : _actualizar,
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.moradoPrincipal,
+                    backgroundColor: context.asis.morado,
                   ),
                   child: _trabajando
                       ? const SizedBox(
@@ -108,9 +108,9 @@ class _ActualizacionObligatoriaPageState
                 'Si no aparece en Play Store, pide el archivo al colegio '
                 '(${Env.correoSoporte}).',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppTheme.textoSecundario,
+                  color: context.asis.textoSecundario,
                 ),
               ),
             ],

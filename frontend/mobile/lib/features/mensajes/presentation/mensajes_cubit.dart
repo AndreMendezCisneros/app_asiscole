@@ -38,7 +38,14 @@ class MensajesCubit extends Cubit<MensajesState> {
       }
     }
     try {
-      final items = await _repo.sincronizar();
+      final items = await _repo.sincronizar(
+        // La primera página se pinta en cuanto llega; las siguientes completan
+        // el historial sin que la pantalla espere por ellas.
+        alAvanzar: (parcial) async {
+          if (!isClosed) emit(MensajesListos(parcial));
+        },
+      );
+      if (isClosed) return;
       emit(MensajesListos(items));
     } catch (_) {
       try {

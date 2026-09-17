@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'asis_colors.dart';
+
 /// Tokens y tema de marca Asis Messenger.
+///
+/// Las constantes siguen siendo los valores del modo claro, para el código que
+/// no depende del brillo. Lo que sí cambia entre claro y oscuro se lee del
+/// tema con `context.asis` (ver [AsisColors]).
 class AppTheme {
   const AppTheme._();
 
@@ -29,54 +35,57 @@ class AppTheme {
 
   static ThemeData _construir(Brightness brillo) {
     final claro = brillo == Brightness.light;
+    final asis = claro ? AsisColors.claro : AsisColors.oscuro;
     final esquema = ColorScheme.fromSeed(
       seedColor: moradoPrincipal,
       brightness: brillo,
-      primary: moradoPrincipal,
-      secondary: moradoSecundario,
-      tertiary: celeste,
-      surface: claro ? fondo : const Color(0xFF0F172A),
+      primary: asis.morado,
+      secondary: asis.moradoSecundario,
+      tertiary: asis.celeste,
+      surface: asis.fondo,
+      onSurface: asis.texto,
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: esquema,
-      scaffoldBackgroundColor: claro ? fondo : esquema.surface,
+      extensions: <ThemeExtension<dynamic>>[asis],
+      scaffoldBackgroundColor: asis.fondo,
       appBarTheme: AppBarTheme(
         centerTitle: false,
-        backgroundColor: claro ? fondo : esquema.surface,
-        foregroundColor: claro ? texto : esquema.onSurface,
+        backgroundColor: asis.fondo,
+        foregroundColor: asis.texto,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleTextStyle: TextStyle(
-          color: claro ? texto : esquema.onSurface,
+          color: asis.texto,
           fontSize: 22,
           fontWeight: FontWeight.w700,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: claro ? blanco : esquema.surfaceContainerHighest,
+        fillColor: asis.superficieAlta,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(24),
-          borderSide: BorderSide(color: claro ? borde : esquema.outline),
+          borderSide: BorderSide(color: asis.borde),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(24),
-          borderSide: BorderSide(color: claro ? borde : esquema.outline),
+          borderSide: BorderSide(color: asis.borde),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(24),
-          borderSide: const BorderSide(color: moradoPrincipal, width: 2),
+          borderSide: BorderSide(color: asis.morado, width: 2),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        hintStyle: const TextStyle(color: textoSecundario),
+        hintStyle: TextStyle(color: asis.textoSecundario),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: moradoPrincipal,
-          foregroundColor: blanco,
+          backgroundColor: asis.morado,
+          foregroundColor: asis.sobreMorado,
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -89,48 +98,48 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: moradoPrincipal,
+          foregroundColor: asis.morado,
           minimumSize: const Size.fromHeight(52),
-          side: const BorderSide(color: borde),
+          side: BorderSide(color: asis.borde),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: borde,
-        selectedColor: moradoClaro.withValues(alpha: 0.35),
-        labelStyle: const TextStyle(color: texto, fontWeight: FontWeight.w600),
+        backgroundColor: claro ? asis.borde : asis.superficieAlta,
+        selectedColor: asis.moradoClaro.withValues(alpha: 0.35),
+        labelStyle: TextStyle(color: asis.texto, fontWeight: FontWeight.w600),
         side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: blanco,
+        color: asis.superficie,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: borde),
+          side: BorderSide(color: asis.borde),
         ),
         margin: EdgeInsets.zero,
       ),
-      dividerTheme: const DividerThemeData(color: borde, thickness: 1),
+      dividerTheme: DividerThemeData(color: asis.borde, thickness: 1),
       snackBarTheme: const SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
       ),
       textTheme: TextTheme(
-        bodyLarge: TextStyle(color: claro ? texto : esquema.onSurface),
-        bodyMedium: TextStyle(color: claro ? texto : esquema.onSurface),
-        bodySmall: const TextStyle(color: textoSecundario),
+        bodyLarge: TextStyle(color: asis.texto),
+        bodyMedium: TextStyle(color: asis.texto),
+        bodySmall: TextStyle(color: asis.textoSecundario),
         titleLarge: TextStyle(
-          color: claro ? texto : esquema.onSurface,
+          color: asis.texto,
           fontWeight: FontWeight.w700,
         ),
         titleMedium: TextStyle(
-          color: claro ? texto : esquema.onSurface,
+          color: asis.texto,
           fontWeight: FontWeight.w600,
         ),
-        labelLarge: const TextStyle(color: textoSecundario),
+        labelLarge: TextStyle(color: asis.textoSecundario),
       ),
     );
   }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/asis_colors.dart';
 
 class FilterChipItem {
   const FilterChipItem({
@@ -45,10 +45,10 @@ class FilterChipRow extends StatelessWidget {
                   ? item.label
                   : '${item.label} ${item.badge}',
             ),
-            selectedColor: AppTheme.moradoPrincipal,
-            backgroundColor: AppTheme.borde.withValues(alpha: 0.7),
+            selectedColor: context.asis.morado,
+            backgroundColor: context.asis.borde.withValues(alpha: 0.7),
             labelStyle: TextStyle(
-              color: selected ? Colors.white : AppTheme.texto,
+              color: selected ? context.asis.sobreMorado : context.asis.texto,
               fontWeight: FontWeight.w600,
               fontSize: 13,
             ),

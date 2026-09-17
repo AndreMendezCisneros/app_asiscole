@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'asiscole_logo.dart';
-import '../theme/app_theme.dart';
+import '../theme/asis_colors.dart';
 
 /// Cabecera de marca de las pantallas de sesión.
 class EncabezadoAsiscole extends StatelessWidget {
@@ -30,17 +30,17 @@ class EncabezadoAsiscole extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: AppTheme.moradoPrincipal,
+              color: context.asis.morado,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: Icon(icono, color: Colors.white, size: 30),
+            child: Icon(icono, color: context.asis.sobreMorado, size: 30),
           ),
         const SizedBox(height: 20),
         Text(
           titulo,
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: AppTheme.texto,
+                color: context.asis.texto,
               ),
         ),
         if (subtitulo != null) ...[
@@ -48,7 +48,7 @@ class EncabezadoAsiscole extends StatelessWidget {
           Text(
             subtitulo!,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.textoSecundario,
+                  color: context.asis.textoSecundario,
                   height: 1.4,
                 ),
           ),

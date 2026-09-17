@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/asis_colors.dart';
 
 /// Campo de búsqueda estilo píldora (fondo claro, borde al tono de la lupa).
 class SearchFieldAsiscole extends StatefulWidget {
@@ -21,10 +21,6 @@ class SearchFieldAsiscole extends StatefulWidget {
 
 class _SearchFieldAsiscoleState extends State<SearchFieldAsiscole> {
   static const _radio = BorderRadius.all(Radius.circular(24));
-  static const _bordeLupa = BorderSide(
-    color: AppTheme.moradoSecundario,
-    width: 1.2,
-  );
 
   @override
   void initState() {
@@ -53,21 +49,22 @@ class _SearchFieldAsiscoleState extends State<SearchFieldAsiscole> {
 
   @override
   Widget build(BuildContext context) {
+    final bordeLupa = BorderSide(color: context.asis.moradoSecundario, width: 1.2);
     return TextField(
       controller: widget.controller,
       onChanged: widget.onChanged,
-      cursorColor: AppTheme.moradoPrincipal,
-      style: const TextStyle(color: AppTheme.texto, fontSize: 15),
+      cursorColor: context.asis.morado,
+      style: TextStyle(color: context.asis.texto, fontSize: 15),
       decoration: InputDecoration(
         hintText: widget.hint,
-        hintStyle: const TextStyle(color: AppTheme.textoSecundario),
+        hintStyle: TextStyle(color: context.asis.textoSecundario),
         filled: true,
-        fillColor: AppTheme.blanco,
-        prefixIcon: const Icon(Icons.search, color: AppTheme.moradoSecundario),
+        fillColor: context.asis.superficie,
+        prefixIcon: Icon(Icons.search, color: context.asis.moradoSecundario),
         suffixIcon: widget.controller.text.isEmpty
             ? null
             : IconButton(
-                icon: const Icon(Icons.close, color: AppTheme.textoSecundario),
+                icon: Icon(Icons.close, color: context.asis.textoSecundario),
                 onPressed: () {
                   widget.controller.clear();
                   widget.onChanged?.call('');
@@ -75,17 +72,17 @@ class _SearchFieldAsiscoleState extends State<SearchFieldAsiscole> {
               ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        border: const OutlineInputBorder(
+        border: OutlineInputBorder(
           borderRadius: _radio,
-          borderSide: _bordeLupa,
+          borderSide: bordeLupa,
         ),
-        enabledBorder: const OutlineInputBorder(
+        enabledBorder: OutlineInputBorder(
           borderRadius: _radio,
-          borderSide: _bordeLupa,
+          borderSide: bordeLupa,
         ),
-        focusedBorder: const OutlineInputBorder(
+        focusedBorder: OutlineInputBorder(
           borderRadius: _radio,
-          borderSide: BorderSide(color: AppTheme.moradoPrincipal, width: 1.8),
+          borderSide: BorderSide(color: context.asis.morado, width: 1.8),
         ),
       ),
     );

@@ -6,7 +6,7 @@ import '../../../core/config/feature_flags.dart';
 import '../../../core/di/injector.dart';
 import '../../../core/error/api_error.dart';
 import '../../../core/push/servicio_push.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/asis_colors.dart';
 import '../../../core/widgets/chip_hijo_activo.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
@@ -30,6 +30,7 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
   String? _error;
   bool _cargando = true;
   bool _activo = false;
+  bool _sinConexion = false;
   EstudianteVinculado? _hijo;
   int? _estudianteId;
   int _epochVisto = 0;
@@ -75,7 +76,9 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
     if (epoch == _epochVisto) return;
     _epochVisto = epoch;
     if (!mounted) return;
-    unawaited(_cargar());
+    // Otro hijo: lo ya pintado no le pertenece.
+    setState(() => _items = null);
+    unawaited(_cargar(forzar: true));
   }
 
   Future<void> _cambiarHijoDesdeChip() async {
@@ -85,14 +88,17 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
     );
   }
 
-  Future<void> _cargar() async {
+  /// [forzar] solo con motivo: cambio de hijo o pull-to-refresh. En cada
+  /// entrada a la pestaña bastan los datos ya conocidos.
+  Future<void> _cargar({bool forzar = false}) async {
     setState(() {
       _cargando = true;
       _error = null;
+      _sinConexion = false;
     });
     try {
       final flags = sl<FeatureFlags>();
-      await flags.refrescar(forzar: true);
+      await flags.refrescar(forzar: forzar);
       final activo = flags.notas.value;
       if (!activo) {
         if (!mounted) return;
@@ -106,8 +112,8 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
 
       final repo = sl<PerfilRepository>();
       final resultados = await Future.wait([
-        repo.obtener(forzar: true),
-        repo.estudiantes(forzar: true),
+        repo.obtener(forzar: forzar),
+        repo.estudiantes(forzar: forzar),
       ]);
       final perfil = resultados[0] as Perfil;
       final hijos = resultados[1] as List<EstudianteVinculado>;
@@ -153,6 +159,7 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
       if (!mounted) return;
       setState(() {
         _activo = true;
+        _sinConexion = e.esSinConexion;
         _error = e.mensaje;
         _cargando = false;
       });
@@ -169,7 +176,7 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.fondo,
+      backgroundColor: context.asis.fondo,
       body: Stack(
         children: [
           const FondoAsiscole(estilo: FondoEstilo.notas),
@@ -183,7 +190,7 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
                     'Notas',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: AppTheme.texto,
+                          color: context.asis.texto,
                         ),
                   ),
                 ),
@@ -215,6 +222,17 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
             'Próximamente\nLas notas se activarán sin una nueva versión.',
       );
     }
+    if (_sinConexion) {
+      // Las notas se consultan en el momento: sin red no hay nada que mostrar,
+      // pero conviene decir que es la conexión y no que la sección esté vacía.
+      return EmptyStateAsiscole(
+        mensaje: 'Sin conexión\nLas notas se consultan al colegio, '
+            'así que necesitas internet para verlas.',
+        mostrarLogo: false,
+        etiquetaReintentar: 'Reintentar',
+        onReintentar: () => unawaited(_cargar(forzar: true)),
+      );
+    }
     if (_error != null) {
       return Center(
         child: Padding(
@@ -225,14 +243,14 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
               Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppTheme.texto,
+                style: TextStyle(
+                  color: context.asis.texto,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: _cargar,
+                onPressed: () => unawaited(_cargar(forzar: true)),
                 child: const Text('Reintentar'),
               ),
             ],
@@ -241,7 +259,7 @@ class _NotasPageState extends State<NotasPage> with CierraSheetAlCambiarTab {
       );
     }
     return RefreshIndicator(
-      onRefresh: _cargar,
+      onRefresh: () => _cargar(forzar: true),
       child: (_items ?? const []).isEmpty
           ? ListView(
               children: const [
@@ -271,13 +289,13 @@ class _CardNota extends StatelessWidget {
     final carrera = (item.carrera ?? '').trim();
     final area = (item.areaNombre ?? '').trim();
     return Material(
-      color: AppTheme.blanco,
+      color: context.asis.superficie,
       borderRadius: BorderRadius.circular(18),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppTheme.borde),
+          border: Border.all(color: context.asis.borde),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,7 +307,7 @@ class _CardNota extends StatelessWidget {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: AppTheme.moradoClaro.withValues(alpha: 0.16),
+                    color: context.asis.moradoClaro.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   alignment: Alignment.center,
@@ -299,16 +317,16 @@ class _CardNota extends StatelessWidget {
                       Text(
                         item.nota,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: AppTheme.moradoPrincipal,
+                        style: TextStyle(
+                          color: context.asis.morado,
                           fontWeight: FontWeight.w800,
                           fontSize: 22,
                         ),
                       ),
                       Text(
                         '/ ${item.notaMaxima?.trim().isNotEmpty == true ? item.notaMaxima : '20'}',
-                        style: const TextStyle(
-                          color: AppTheme.moradoSecundario,
+                        style: TextStyle(
+                          color: context.asis.moradoSecundario,
                           fontWeight: FontWeight.w600,
                           fontSize: 12,
                         ),
@@ -323,8 +341,8 @@ class _CardNota extends StatelessWidget {
                     children: [
                       Text(
                         item.tituloSemana,
-                        style: const TextStyle(
-                          color: AppTheme.texto,
+                        style: TextStyle(
+                          color: context.asis.texto,
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
                         ),
@@ -333,8 +351,8 @@ class _CardNota extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           item.rangoFechas,
-                          style: const TextStyle(
-                            color: AppTheme.textoSecundario,
+                          style: TextStyle(
+                            color: context.asis.textoSecundario,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -346,17 +364,17 @@ class _CardNota extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            const Divider(height: 1, color: AppTheme.borde),
+            Divider(height: 1, color: context.asis.borde),
             const SizedBox(height: 10),
             if (carrera.isNotEmpty) _DatoNota(etiqueta: 'Carrera', valor: carrera),
             if (area.isNotEmpty) _DatoNota(etiqueta: 'Área', valor: area),
             if (item.fechaRegistro.isNotEmpty)
               _DatoNota(etiqueta: 'Registrada', valor: item.fechaRegistro),
             if (carrera.isEmpty && area.isEmpty && item.rangoFechas.isEmpty)
-              const Text(
+              Text(
                 'Nota semanal del colegio',
                 style: TextStyle(
-                  color: AppTheme.textoSecundario,
+                  color: context.asis.textoSecundario,
                   fontSize: 13,
                 ),
               ),
@@ -384,8 +402,8 @@ class _DatoNota extends StatelessWidget {
             width: 88,
             child: Text(
               etiqueta,
-              style: const TextStyle(
-                color: AppTheme.textoSecundario,
+              style: TextStyle(
+                color: context.asis.textoSecundario,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -394,8 +412,8 @@ class _DatoNota extends StatelessWidget {
           Expanded(
             child: Text(
               valor,
-              style: const TextStyle(
-                color: AppTheme.texto,
+              style: TextStyle(
+                color: context.asis.texto,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),

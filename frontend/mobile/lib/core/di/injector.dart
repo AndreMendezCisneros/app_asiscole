@@ -1,5 +1,4 @@
 import 'package:get_it/get_it.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../features/asistencias/data/asistencias_api.dart';
 import '../../features/auth/data/auth_api.dart';
@@ -20,23 +19,20 @@ import '../session/eventos_sesion.dart';
 import '../storage/local_db.dart';
 import '../storage/secure_storage.dart';
 import '../storage/token_store.dart';
+import '../theme/preferencia_tema.dart';
 import '../version/version_app_api.dart';
 
 final GetIt sl = GetIt.instance;
 
+/// Registra las dependencias. Es síncrono a propósito: lo que necesite red o
+/// canal de plataforma se resuelve después del primer frame.
 Future<void> configurarInyector() async {
-  var versionCode = '';
-  try {
-    versionCode = (await PackageInfo.fromPlatform()).buildNumber;
-  } on Object {
-    // Tests y plataformas sin PackageInfo: se omite la cabecera.
-  }
-
   sl.registerLazySingleton<SecureStorage>(SecureStorage.new);
   sl.registerLazySingleton<LocalDb>(LocalDb.new);
   sl.registerLazySingleton<NetworkInfo>(NetworkInfo.new);
   sl.registerLazySingleton<InfoDispositivo>(InfoDispositivo.new);
   sl.registerLazySingleton<EventosSesion>(EventosSesion.new);
+  sl.registerLazySingleton<PreferenciaTema>(PreferenciaTema.new);
   sl.registerLazySingleton<ServicioPush>(ServicioPush.new);
 
   sl.registerLazySingleton<SessionStorage>(() => SessionStorage(sl()));
@@ -50,7 +46,6 @@ Future<void> configurarInyector() async {
         return (token: emitido.dataToken, expiraEn: emitido.dataExpiraEn);
       },
       alInvalidarSesion: sl<EventosSesion>().sesionInvalidada,
-      versionCode: versionCode,
     ),
   );
 
@@ -64,6 +59,7 @@ Future<void> configurarInyector() async {
       dispositivo: sl(),
       obtenerPushToken: sl<ServicioPush>().token,
       borrarCacheMensajes: sl<LocalDb>().vaciar,
+      revocarPushToken: sl<ServicioPush>().revocarToken,
     ),
   );
   sl.registerLazySingleton<AuthCubit>(

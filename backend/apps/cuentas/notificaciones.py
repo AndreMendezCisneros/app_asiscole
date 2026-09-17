@@ -22,9 +22,13 @@ def _tokens_activos(apoderado: Apoderado, device_id: str | None = None) -> list[
 def _enviar(tokens: list[PushToken], tipo: str, destino: str) -> bool:
     if not tokens:
         return False
+    # Import local: `services` ya importa este modulo y al reves seria un ciclo.
+    from apps.cuentas.services import desactivar_tokens_invalidos  # noqa: PLC0415
+
     carga = MensajePush(message_id=str(uuid.uuid4()), tipo=tipo, destino=destino)
     try:
-        ServicioPush().enviar(tokens, carga, idempotente=True)
+        resultado = ServicioPush().enviar(tokens, carga, idempotente=True)
+        desactivar_tokens_invalidos(resultado.tokens_invalidos)
         return True
     except Exception:  # noqa: BLE001
         logger.warning("push_cuentas_error", extra={"tipo": tipo, "destinos": len(tokens)})

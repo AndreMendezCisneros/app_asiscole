@@ -8,6 +8,7 @@ from celery import shared_task
 from django.utils import timezone
 
 from apps.cuentas.models import Apoderado, PushToken
+from apps.cuentas.services import desactivar_tokens_invalidos
 from apps.mensajeria.models import TEXTO_ANONIMIZADO, Mensaje
 from apps.mensajeria.push.base import MensajePush
 from apps.mensajeria.push.facade import ServicioPush
@@ -50,6 +51,7 @@ def enviar_push_mensaje(mensaje_id: str) -> bool:
     )
     try:
         resultado = ServicioPush().enviar(tokens, carga)
+        desactivar_tokens_invalidos(resultado.tokens_invalidos)
         if resultado.hubo_entrega:
             mensaje.marcar_entregado()
             return True
@@ -90,6 +92,7 @@ def enviar_push_seccion(
     carga = MensajePush(message_id=message_id, tipo=tipo, destino=destino)
     try:
         resultado = ServicioPush().enviar(tokens, carga)
+        desactivar_tokens_invalidos(resultado.tokens_invalidos)
         return resultado.hubo_entrega
     except Exception:  # noqa: BLE001
         logger.warning(

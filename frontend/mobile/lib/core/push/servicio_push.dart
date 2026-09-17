@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../config/env.dart';
+import 'avisos_vistos.dart';
 import 'firebase_init.dart';
 
 /// Notificaciones push. Payload mínimo del backend: tipo, message_id, destino.
@@ -13,8 +14,23 @@ class ServicioPush {
   ServicioPush([FirebaseMessaging? mensajeria]) : _mensajeriaInyectada = mensajeria;
 
   /// Canal actual. Si Android bloquea uno viejo (IMPORTANCE_NONE), hay que
-  /// subir de versión: el mismo ID no recupera importancia.
-  static const String canalId = 'asiscole_avisos_v3';
+  /// subir de versión: el mismo ID no recupera importancia. Tampoco se puede
+  /// cambiar el sonido de un canal ya creado, y por eso el sonido propio llega
+  /// en `v4` en lugar de modificar `v3`.
+  static const String canalId = 'asiscole_avisos_v4';
+
+  /// Sonido de marca en `res/raw`. Se declara sin extensión, como exige Android.
+  static const String _sonidoCanal = 'asis_aviso';
+
+  /// Canal que el backend nombra en el push (`FCM_ANDROID_CHANNEL_ID`).
+  ///
+  /// Se sigue creando aunque la app ya no lo use para sus propias
+  /// notificaciones: las que pinta Play Services llevan ese `channel_id` y sin
+  /// el canal no se mostrarían. Dejará de hacer falta cuando el servidor
+  /// apunte a [canalId], y eso solo puede pasar cuando ya nadie use la versión
+  /// instalada.
+  static const String canalBackendId = 'asiscole_avisos_v3';
+
   static const List<String> _canalesObsoletos = [
     'asiscole_avisos',
     'asiscole_avisos_v2',
@@ -108,6 +124,21 @@ class ServicioPush {
     }
   }
 
+  /// Borra el token FCM/APNs del dispositivo al cerrar sesión.
+  ///
+  /// El backend desactiva el token en `POST /auth/logout`, pero esa petición
+  /// puede no llegar (sin red) y el apoderado seguiría recibiendo avisos que no
+  /// puede abrir. Borrarlo aquí corta la entrega en el propio teléfono; el
+  /// servidor se enterará porque el proveedor empezará a rechazar ese token.
+  Future<void> revocarToken() async {
+    try {
+      await (_mensajeria ?? FirebaseMessaging.instance).deleteToken();
+    } on Object {
+      // Sin Play Services o sin token previo no hay nada que revocar.
+    }
+    _activo = false;
+  }
+
   Future<void> _iniciarNotificacionesLocales() async {
     const ajustes = InitializationSettings(
       android: AndroidInitializationSettings('@drawable/ic_stat_asiscole'),
@@ -129,7 +160,10 @@ class ServicioPush {
     await android?.requestNotificationsPermission();
   }
 
-  /// Crea el canal actual. `purgar_obsoletos` solo en arranque (no en cada push).
+  /// Crea los canales vigentes. `purgarObsoletos` solo en arranque.
+  ///
+  /// Son dos: el que usa la app ([canalId], con sonido de marca) y el que
+  /// nombra el backend ([canalBackendId], con el sonido del sistema).
   static Future<void> asegurarCanalAvisos(
     AndroidFlutterLocalNotificationsPlugin android, {
     bool purgarObsoletos = false,
@@ -150,6 +184,18 @@ class ServicioPush {
         description: 'Entradas, salidas e incidencias',
         importance: Importance.max,
         playSound: true,
+        sound: RawResourceAndroidNotificationSound(_sonidoCanal),
+        enableVibration: true,
+        showBadge: true,
+      ),
+    );
+    await android.createNotificationChannel(
+      const AndroidNotificationChannel(
+        canalBackendId,
+        'Avisos del colegio',
+        description: 'Entradas, salidas e incidencias',
+        importance: Importance.max,
+        playSound: true,
         enableVibration: true,
         showBadge: true,
       ),
@@ -160,19 +206,39 @@ class ServicioPush {
     final destino = _destinoDe(mensaje);
     final tipo = mensaje.data['tipo']?.toString() ?? '';
     final aviso = mensaje.notification;
+    final messageId = mensaje.data['message_id']?.toString() ?? '';
 
     // FCM del canal es solo `data` (sin texto personal). Mostramos aviso genérico.
     final titulo = aviso?.title ?? Env.nombreApp;
     final cuerpo = aviso?.body ?? _textoGenerico(tipo);
 
-    unawaited(_mostrarEnBandeja(
-      id: mensaje.hashCode,
+    unawaited(_mostrarSiEsNuevo(
+      messageId: messageId,
+      respaldoId: mensaje.hashCode,
       titulo: titulo,
       cuerpo: cuerpo,
       payload: destino,
     ));
 
+    // La bandeja se refresca aunque el aviso fuera repetido: puede traer datos
+    // que la pantalla todavía no tiene.
     _avisarDestino(destino);
+  }
+
+  Future<void> _mostrarSiEsNuevo({
+    required String messageId,
+    required int respaldoId,
+    required String titulo,
+    required String cuerpo,
+    String? payload,
+  }) async {
+    if (await AvisosVistos.yaMostrado(messageId)) return;
+    await _mostrarEnBandeja(
+      id: AvisosVistos.idNotificacion(messageId, respaldo: respaldoId),
+      titulo: titulo,
+      cuerpo: cuerpo,
+      payload: payload,
+    );
   }
 
   Future<void> _mostrarEnBandeja({
@@ -193,6 +259,7 @@ class ServicioPush {
           importance: Importance.max,
           priority: Priority.max,
           playSound: true,
+          sound: RawResourceAndroidNotificationSound(_sonidoCanal),
           enableVibration: true,
           icon: '@drawable/ic_stat_asiscole',
           largeIcon: DrawableResourceAndroidBitmap('ic_asiscole_logo'),

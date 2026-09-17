@@ -25,7 +25,8 @@ void main() {
       'con red muestra lo que devuelve la sincronización',
       setUp: () {
         when(repo.soloCache).thenAnswer((_) async => []);
-        when(repo.sincronizar).thenAnswer((_) async => [_mensaje('a')]);
+        when(() => repo.sincronizar(alAvanzar: any(named: 'alAvanzar')))
+            .thenAnswer((_) async => [_mensaje('a')]);
       },
       build: () => MensajesCubit(repo),
       act: (cubit) => cubit.cargar(),
@@ -40,7 +41,8 @@ void main() {
       'si la sincronización falla, cae a la caché y marca offline',
       setUp: () {
         when(repo.soloCache).thenAnswer((_) async => [_mensaje('cacheado')]);
-        when(repo.sincronizar).thenThrow(Exception('sin red'));
+        when(() => repo.sincronizar(alAvanzar: any(named: 'alAvanzar')))
+            .thenThrow(Exception('sin red'));
       },
       build: () => MensajesCubit(repo),
       act: (cubit) => cubit.cargar(),
@@ -55,7 +57,8 @@ void main() {
       'sin red y sin caché informa el error',
       setUp: () {
         when(repo.soloCache).thenThrow(Exception('base local caída'));
-        when(repo.sincronizar).thenThrow(Exception('sin red'));
+        when(() => repo.sincronizar(alAvanzar: any(named: 'alAvanzar')))
+            .thenThrow(Exception('sin red'));
       },
       build: () => MensajesCubit(repo),
       act: (cubit) => cubit.cargar(),
@@ -66,7 +69,8 @@ void main() {
       'pinta la caché antes de esperar a la red',
       setUp: () {
         when(repo.soloCache).thenAnswer((_) async => [_mensaje('cacheado')]);
-        when(repo.sincronizar).thenAnswer((_) async {
+        when(() => repo.sincronizar(alAvanzar: any(named: 'alAvanzar')))
+            .thenAnswer((_) async {
           await Future<void>.delayed(const Duration(milliseconds: 20));
           return [_mensaje('cacheado'), _mensaje('nuevo')];
         });
@@ -80,6 +84,30 @@ void main() {
             .having((e) => e.items.length, 'caché + servidor', 2),
       ],
     );
+
+    blocTest<MensajesCubit, MensajesState>(
+      'la primera página se pinta sin esperar al resto del historial',
+      setUp: () {
+        when(repo.soloCache).thenAnswer((_) async => []);
+        when(() => repo.sincronizar(alAvanzar: any(named: 'alAvanzar')))
+            .thenAnswer((invocacion) async {
+          final alAvanzar = invocacion.namedArguments[#alAvanzar]
+              as Future<void> Function(List<Mensaje>)?;
+          await alAvanzar?.call([_mensaje('reciente')]);
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          return [_mensaje('reciente'), _mensaje('antiguo')];
+        });
+      },
+      build: () => MensajesCubit(repo),
+      act: (cubit) => cubit.cargar(),
+      expect: () => [
+        isA<MensajesCargando>(),
+        isA<MensajesListos>()
+            .having((e) => e.items.length, 'primera página', 1),
+        isA<MensajesListos>()
+            .having((e) => e.items.length, 'historial completo', 2),
+      ],
+    );
   });
 
   group('MensajesCubit — marcar leído', () {
@@ -87,7 +115,8 @@ void main() {
       'con la red caída el mensaje igual se ve leído',
       setUp: () {
         when(repo.soloCache).thenAnswer((_) async => []);
-        when(repo.sincronizar).thenAnswer((_) async => [_mensaje('a')]);
+        when(() => repo.sincronizar(alAvanzar: any(named: 'alAvanzar')))
+            .thenAnswer((_) async => [_mensaje('a')]);
         // El repositorio encola el acuse; aquí se simula el peor caso: revienta.
         when(() => repo.marcarLeidos(['a'])).thenThrow(Exception('sin red'));
       },
@@ -107,7 +136,7 @@ void main() {
       'un mensaje ya leído no vuelve a llamar al API',
       setUp: () {
         when(repo.soloCache).thenAnswer((_) async => []);
-        when(repo.sincronizar)
+        when(() => repo.sincronizar(alAvanzar: any(named: 'alAvanzar')))
             .thenAnswer((_) async => [_mensaje('a', leido: true)]);
       },
       build: () => MensajesCubit(repo),

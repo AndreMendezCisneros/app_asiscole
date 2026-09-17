@@ -3,11 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-
 import '../../../core/di/injector.dart';
 import '../../../core/push/servicio_push.dart';
 import '../../../core/router/app_router.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/asis_colors.dart';
 import '../../../core/util/formato.dart';
 import '../../../core/widgets/chip_hijo_activo.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
@@ -19,6 +18,7 @@ import '../../../core/widgets/tour_asiscole.dart';
 import '../../auth/presentation/auth_cubit.dart';
 import '../../auth/presentation/auth_state.dart';
 import '../../perfil/data/perfil_repository.dart';
+import '../domain/filtros_bandeja.dart';
 import '../domain/mensaje.dart';
 import 'mensajes_cubit.dart';
 
@@ -169,6 +169,7 @@ class _VistaState extends State<_Vista>
   List<Mensaje> _filtrar(List<Mensaje> items) {
     return items.where((m) {
       if (_filtro == 'no_leidos' && m.leido) return false;
+      if (_filtro == 'citaciones' && !esCitacion(m)) return false;
       if (_filtroHijoId != null && m.estudianteId != _filtroHijoId) {
         return false;
       }
@@ -185,11 +186,31 @@ class _VistaState extends State<_Vista>
     }).toList();
   }
 
+  List<Mensaje>? _fuenteMemo;
+  String? _claveMemo;
+  List<_FilaBandeja>? _bandejaMemo;
+
+  /// Filtra y agrupa una sola vez por combinación de filtros.
+  ///
+  /// `build` se ejecuta también al desplazar o al abrir el teclado; recorrer
+  /// cientos de mensajes en cada pasada se notaba al escribir en el buscador.
+  List<_FilaBandeja> _bandeja(List<Mensaje> items) {
+    final clave = '$_filtro|$_consulta|$_filtroHijoId|$_filtroColegio';
+    if (identical(_fuenteMemo, items) &&
+        clave == _claveMemo &&
+        _bandejaMemo != null) {
+      return _bandejaMemo!;
+    }
+    _fuenteMemo = items;
+    _claveMemo = clave;
+    return _bandejaMemo = _agruparPorDia(_filtrar(items));
+  }
+
   @override
   Widget build(BuildContext context) {
     final activo = _hijoActivo;
     return Scaffold(
-      backgroundColor: AppTheme.fondo,
+      backgroundColor: context.asis.fondo,
       body: Stack(
         children: [
           const FondoAsiscole(estilo: FondoEstilo.mensajes),
@@ -218,7 +239,17 @@ class _VistaState extends State<_Vista>
                 }
                 final listos = state as MensajesListos;
                 final noLeidos = listos.items.where((m) => !m.leido).length;
-                final filtrados = _filtrar(listos.items);
+                final citaciones = listos.items.where(esCitacion).length;
+                if (citaciones == 0 && _filtro == 'citaciones') {
+                  // El chip se esconde al quedarse sin citaciones (p. ej. tras
+                  // cambiar de hijo); el filtro no puede quedar colgado.
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && _filtro == 'citaciones') {
+                      setState(() => _filtro = 'todos');
+                    }
+                  });
+                }
+                final filas = _bandeja(listos.items);
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -232,7 +263,7 @@ class _VistaState extends State<_Vista>
                             .headlineMedium
                             ?.copyWith(
                               fontWeight: FontWeight.w800,
-                              color: AppTheme.texto,
+                              color: context.asis.texto,
                             ),
                       ),
                     ),
@@ -249,19 +280,23 @@ class _VistaState extends State<_Vista>
                      // en modo offline; se evita el aviso duplicado y solo se
                      // informa cuando el fallo es de la sincronización.
                     if (listos.offline && !_bannerDelShellVisible(context))
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: Row(
                           children: [
-                            Icon(Icons.wifi_off, size: 16, color: Color(0xFF856404)),
-                            SizedBox(width: 6),
+                            Icon(
+                              Icons.wifi_off,
+                              size: 16,
+                              color: context.asis.avisoTexto,
+                            ),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 'Mostrando mensajes guardados (sin conexión)',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF856404),
+                                  color: context.asis.avisoTexto,
                                 ),
                               ),
                             ),
@@ -283,12 +318,24 @@ class _VistaState extends State<_Vista>
                         selectedId: _filtro,
                         onSelected: (id) => setState(() => _filtro = id),
                         items: [
-                          const FilterChipItem(id: 'todos', label: 'Todos'),
+                          FilterChipItem(
+                            id: 'todos',
+                            label: 'Todos',
+                            badge: listos.items.length,
+                          ),
                           FilterChipItem(
                             id: 'no_leidos',
                             label: 'No leídos',
                             badge: noLeidos,
                           ),
+                          // Solo cuando hay alguna, como los filtros de hijo y
+                          // colegio: un chip que nunca da resultados estorba.
+                          if (citaciones > 0)
+                            FilterChipItem(
+                              id: 'citaciones',
+                              label: 'Citaciones',
+                              badge: citaciones,
+                            ),
                         ],
                       ),
                     ),
@@ -347,13 +394,9 @@ class _VistaState extends State<_Vista>
                                   ? 'Sin conexión — solo mensajes guardados'
                                   : 'Aún no tienes mensajes',
                             )
-                          : filtrados.isEmpty
+                          : filas.isEmpty
                               ? EmptyStateAsiscole(
-                                  mensaje: _consulta.isEmpty
-                                      ? 'No hay mensajes con ese filtro'
-                                      : 'Sin resultados para «$_consulta».\n'
-                                          'La búsqueda solo mira los mensajes '
-                                          'descargados en este teléfono.',
+                                  mensaje: _mensajeVacio(),
                                   mostrarLogo: false,
                                   etiquetaReintentar: 'Quitar filtros',
                                   onReintentar: _limpiarFiltros,
@@ -362,49 +405,34 @@ class _VistaState extends State<_Vista>
                                   onRefresh: () => context
                                       .read<MensajesCubit>()
                                       .cargar(silencioso: true),
-                                  child: Builder(
-                                    builder: (context) {
-                                      final ahoraLima = FechasLima.enLima(
-                                        DateTime.now().toUtc(),
-                                      );
-                                      return ListView.separated(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          12,
-                                          8,
-                                          12,
-                                          24,
+                                  child: ListView.builder(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      12,
+                                      8,
+                                      12,
+                                      24,
+                                    ),
+                                    itemCount: filas.length,
+                                    cacheExtent: 720,
+                                    itemBuilder: (context, i) {
+                                      final fila = filas[i];
+                                      final titulo = fila.titulo;
+                                      if (titulo != null) {
+                                        return _SeparadorDia(titulo: titulo);
+                                      }
+                                      final m = fila.mensaje!;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 4,
                                         ),
-                                        itemCount: filtrados.length,
-                                        cacheExtent: 720,
-                                        separatorBuilder: (_, _) =>
-                                            const SizedBox(height: 4),
-                                        itemBuilder: (context, i) {
-                                          final m = filtrados[i];
-                                          final lima =
-                                              FechasLima.enLima(m.emitidoEn);
-                                          final mismaFecha =
-                                              lima.year == ahoraLima.year &&
-                                                  lima.month ==
-                                                      ahoraLima.month &&
-                                                  lima.day == ahoraLima.day;
-                                          final marca = mismaFecha
-                                              ? FechasLima.horaAmPm(
-                                                  m.emitidoEn,
-                                                )
-                                              : FechasLima.diaMesCorto.format(
-                                                  DateTime(
-                                                    lima.year,
-                                                    lima.month,
-                                                    lima.day,
-                                                  ),
-                                                );
-                                          return _FilaMensaje(
+                                        child: RepaintBoundary(
+                                          child: _FilaMensaje(
                                             key: ValueKey(m.id),
                                             mensaje: m,
-                                            marcaTiempo: marca,
+                                            marcaTiempo: fila.marcaTiempo,
                                             onTap: () => _detalle(m),
-                                          );
-                                        },
+                                          ),
+                                        ),
                                       );
                                     },
                                   ),
@@ -420,12 +448,82 @@ class _VistaState extends State<_Vista>
     );
   }
 
+  String _mensajeVacio() {
+    if (_consulta.isNotEmpty) {
+      return 'Sin resultados para «$_consulta».\n'
+          'La búsqueda solo mira los mensajes descargados en este teléfono.';
+    }
+    return switch (_filtro) {
+      'no_leidos' => 'No te queda ningún mensaje sin leer.',
+      'citaciones' => 'No hay citaciones para este filtro.',
+      _ when _filtroHijoId != null => 'Este hijo no tiene mensajes todavía.',
+      _ when _filtroColegio != null =>
+        'Este colegio no tiene mensajes todavía.',
+      _ => 'No hay mensajes con ese filtro',
+    };
+  }
+
   Future<void> _detalle(Mensaje m) async {
     unawaited(context.read<MensajesCubit>().abrir(m));
     if (!mounted) return;
     await mostrarSheetSeccion(
       isScrollControlled: true,
       builder: (_) => _DetalleMensajeSheet(mensaje: m),
+    );
+  }
+}
+
+/// Fila de la bandeja: o un separador de día, o un mensaje.
+class _FilaBandeja {
+  const _FilaBandeja.dia(this.titulo)
+      : mensaje = null,
+        marcaTiempo = '';
+  const _FilaBandeja.mensaje(this.mensaje, this.marcaTiempo) : titulo = null;
+
+  final String? titulo;
+  final Mensaje? mensaje;
+  final String marcaTiempo;
+}
+
+/// Agrupa por día en la zona del colegio, respetando el orden que ya trae la
+/// lista (el más reciente primero).
+List<_FilaBandeja> _agruparPorDia(List<Mensaje> items) {
+  final hoyLima = FechasLima.enLima(DateTime.now().toUtc());
+  final hoy = DateTime(hoyLima.year, hoyLima.month, hoyLima.day);
+
+  final filas = <_FilaBandeja>[];
+  DateTime? diaEnCurso;
+  for (final m in items) {
+    final lima = FechasLima.enLima(m.emitidoEn);
+    final dia = DateTime(lima.year, lima.month, lima.day);
+    if (diaEnCurso == null || dia != diaEnCurso) {
+      diaEnCurso = dia;
+      filas.add(_FilaBandeja.dia(tituloDia(dia, hoy)));
+    }
+    // Dentro de un día el encabezado ya da la fecha: basta con la hora.
+    filas.add(_FilaBandeja.mensaje(m, FechasLima.horaAmPm(m.emitidoEn)));
+  }
+  return filas;
+}
+
+class _SeparadorDia extends StatelessWidget {
+  const _SeparadorDia({required this.titulo});
+
+  final String titulo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
+      child: Text(
+        titulo,
+        style: TextStyle(
+          color: context.asis.textoSecundario,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          letterSpacing: 0.4,
+        ),
+      ),
     );
   }
 }
@@ -444,14 +542,15 @@ class _FilaMensaje extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (icono, color, etiqueta) = _estiloTipo(mensaje.tipo, mensaje.metadata);
+    final (icono, color, etiqueta) =
+        _estiloTipo(context, mensaje.tipo, mensaje.metadata);
     final nombreHijo = (mensaje.estudianteNombre ?? '').trim();
     final primerNombre = nombreHijo.isEmpty
         ? ''
         : nombreHijo.split(RegExp(r'\s+')).first;
 
     return Material(
-      color: AppTheme.blanco,
+      color: context.asis.superficie,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -494,8 +593,8 @@ class _FilaMensaje extends StatelessWidget {
                         const Spacer(),
                         Text(
                           marcaTiempo,
-                          style: const TextStyle(
-                            color: AppTheme.textoSecundario,
+                          style: TextStyle(
+                            color: context.asis.textoSecundario,
                             fontSize: 12,
                           ),
                         ),
@@ -508,7 +607,7 @@ class _FilaMensaje extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: AppTheme.texto,
+                          color: context.asis.texto,
                           fontSize: 15,
                           fontWeight: mensaje.leido
                               ? FontWeight.w700
@@ -523,8 +622,8 @@ class _FilaMensaje extends StatelessWidget {
                         mensaje.colegio!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppTheme.textoSecundario,
+                        style: TextStyle(
+                          color: context.asis.textoSecundario,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -536,7 +635,7 @@ class _FilaMensaje extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: AppTheme.textoSecundario,
+                        color: context.asis.textoSecundario,
                         fontWeight:
                             mensaje.leido ? FontWeight.w400 : FontWeight.w600,
                         height: 1.35,
@@ -553,8 +652,8 @@ class _FilaMensaje extends StatelessWidget {
                                   : Icons.schedule,
                           size: 14,
                           color: mensaje.leido
-                              ? AppTheme.celeste
-                              : AppTheme.textoSecundario,
+                              ? context.asis.celeste
+                              : context.asis.textoSecundario,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -566,8 +665,8 @@ class _FilaMensaje extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 11,
                             color: mensaje.leido
-                                ? AppTheme.celeste
-                                : AppTheme.textoSecundario,
+                                ? context.asis.celeste
+                                : context.asis.textoSecundario,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -582,8 +681,8 @@ class _FilaMensaje extends StatelessWidget {
                   width: 10,
                   height: 10,
                   margin: const EdgeInsets.only(top: 6),
-                  decoration: const BoxDecoration(
-                    color: AppTheme.moradoClaro,
+                  decoration: BoxDecoration(
+                    color: context.asis.moradoClaro,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -596,6 +695,7 @@ class _FilaMensaje extends StatelessWidget {
   }
 
   static (IconData, Color, String) _estiloTipo(
+    BuildContext context,
     String tipo, [
     Map<String, dynamic> meta = const {},
   ]) {
@@ -604,24 +704,24 @@ class _FilaMensaje extends StatelessWidget {
       if (contexto == 'cita') {
         return (
           Icons.event_available_outlined,
-          AppTheme.moradoPrincipal,
+          context.asis.morado,
           'Citación',
         );
       }
       if (contexto == 'pension') {
-        return (Icons.payments_outlined, AppTheme.moradoSecundario, 'Pensión');
+        return (Icons.payments_outlined, context.asis.moradoSecundario, 'Pensión');
       }
     }
     return switch (tipo) {
-      'entrada' => (Icons.login_rounded, AppTheme.verdeEntrada, 'Entrada'),
-      'salida' => (Icons.logout_rounded, AppTheme.indigoSalida, 'Salida'),
+      'entrada' => (Icons.login_rounded, context.asis.verdeEntrada, 'Entrada'),
+      'salida' => (Icons.logout_rounded, context.asis.indigoSalida, 'Salida'),
       'incidencia' => (
           Icons.warning_amber_rounded,
-          AppTheme.ambarIncidencia,
+          context.asis.ambarIncidencia,
           'Incidencia',
         ),
-      'aviso' => (Icons.campaign_outlined, AppTheme.moradoSecundario, 'Aviso'),
-      _ => (Icons.mail_outline, AppTheme.textoSecundario, 'Mensaje'),
+      'aviso' => (Icons.campaign_outlined, context.asis.moradoSecundario, 'Aviso'),
+      _ => (Icons.mail_outline, context.asis.textoSecundario, 'Mensaje'),
     };
   }
 }
@@ -671,25 +771,26 @@ class _DetalleMensajeSheet extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppTheme.borde,
+                  color: context.asis.borde,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              _FilaMensaje._estiloTipo(mensaje.tipo, mensaje.metadata).$3,
-              style: const TextStyle(
+              _FilaMensaje._estiloTipo(context, mensaje.tipo, mensaje.metadata)
+                  .$3,
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: AppTheme.texto,
+                color: context.asis.texto,
                 fontSize: 18,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               FechasLima.fechaHoraAmPm(mensaje.emitidoEn),
-              style: const TextStyle(
-                color: AppTheme.textoSecundario,
+              style: TextStyle(
+                color: context.asis.textoSecundario,
                 fontSize: 13,
               ),
             ),
@@ -706,19 +807,19 @@ class _DetalleMensajeSheet extends StatelessWidget {
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    color: AppTheme.blanco,
+                    color: context.asis.superficie,
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(4),
                       topRight: Radius.circular(18),
                       bottomLeft: Radius.circular(18),
                       bottomRight: Radius.circular(18),
                     ),
-                    border: Border.all(color: AppTheme.borde),
+                    border: Border.all(color: context.asis.borde),
                   ),
                   child: Text(
                     mensaje.texto,
-                    style: const TextStyle(
-                      color: AppTheme.texto,
+                    style: TextStyle(
+                      color: context.asis.texto,
                       fontSize: 15,
                       height: 1.45,
                     ),
@@ -733,8 +834,8 @@ class _DetalleMensajeSheet extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
                     e,
-                    style: const TextStyle(
-                      color: AppTheme.textoSecundario,
+                    style: TextStyle(
+                      color: context.asis.textoSecundario,
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -750,7 +851,7 @@ class _DetalleMensajeSheet extends StatelessWidget {
               'Solo lectura — este canal no permite responder',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textoSecundario,
+                    color: context.asis.textoSecundario,
                   ),
             ),
           ],

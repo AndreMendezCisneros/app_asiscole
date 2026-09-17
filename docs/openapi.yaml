@@ -1033,6 +1033,12 @@ components:
         es_grave: { type: boolean }
         tiene_evidencia: { type: boolean }
         reportado_por: { type: string }
+        observaciones:
+          type: string
+          nullable: true
+          description: >-
+            Texto que escribió el auxiliar al registrar la falta. Puede
+            mencionar a otros menores, así que no se registra en logs.
         confirmada:
           type: boolean
           description: True si el apoderado ya confirmó esta incidencia (BD central).
@@ -1047,7 +1053,6 @@ components:
         - $ref: "#/components/schemas/Incidencia"
         - type: object
           properties:
-            observaciones: { type: string, nullable: true }
             evidencias:
               type: array
               items:

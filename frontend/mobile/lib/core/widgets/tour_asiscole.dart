@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/asis_colors.dart';
 
 /// Tour corto por sección (manual interactivo in-app).
 class TourAsiscole {
@@ -44,19 +44,19 @@ class TourAsiscole {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.blanco,
+        backgroundColor: context.asis.superficie,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           titulo,
-          style: const TextStyle(
-            color: AppTheme.texto,
+          style: TextStyle(
+            color: context.asis.texto,
             fontWeight: FontWeight.w800,
           ),
         ),
         content: Text(
           cuerpo,
-          style: const TextStyle(
-            color: AppTheme.texto,
+          style: TextStyle(
+            color: context.asis.texto,
             height: 1.4,
             fontWeight: FontWeight.w500,
           ),
@@ -98,9 +98,9 @@ class GuiasTour {
   static const incidencias = (
     titulo: 'Incidencias',
     cuerpo:
-        'Revisa las incidencias del hijo activo. Confirma que las recibiste '
-        'para que el colegio sepa que ya te enteraste. Las citaciones estarán '
-        'disponibles más adelante.',
+        'Revisa las incidencias del hijo activo. Toca una para ver el detalle '
+        'y las observaciones del auxiliar, y confirma que la recibiste para que '
+        'el colegio sepa que ya te enteraste.',
   );
 
   static const notas = (

@@ -6,17 +6,19 @@ import 'package:intl/intl.dart';
 
 import '../../../core/di/injector.dart';
 import '../../../core/error/api_error.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/asis_colors.dart';
 import '../../../core/widgets/chip_hijo_activo.dart';
 import '../../../core/widgets/day_status_badge.dart';
 import '../../../core/widgets/empty_state_asiscole.dart';
 import '../../../core/widgets/fondo_asiscole.dart';
-import '../../../core/widgets/pantalla_carga_asiscole.dart';
 import '../../../core/widgets/selector_hijo_sheet.dart';
 import '../../../core/widgets/tour_asiscole.dart';
 import '../../auth/domain/perfil.dart';
 import '../../perfil/data/perfil_repository.dart';
 import '../data/asistencias_api.dart';
+
+/// El mes en curso cambia durante el día; los ya cerrados, casi nunca.
+const _ttlMesEnCurso = Duration(seconds: 45);
 
 class AsistenciasPage extends StatefulWidget {
   const AsistenciasPage({super.key});
@@ -35,6 +37,13 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
   EstudianteVinculado? _hijo;
   int? _estudianteId;
   int _epochVisto = 0;
+
+  /// Meses ya descargados en esta visita, por `estudiante-año-mes`.
+  ///
+  /// Solo en memoria: la asistencia no se guarda en el dispositivo (Ley N.º
+  /// 29733, minimización), así que desaparece al salir de la pantalla y al
+  /// cerrar sesión. Evita repetir la petición al ir y volver entre meses.
+  final Map<String, _MesCacheado> _mesesEnMemoria = {};
 
   static final _fmtMes = DateFormat('MMMM yyyy', 'es_PE');
   static final _fmtDiaLargo = DateFormat("EEEE d 'de' MMMM", 'es_PE');
@@ -72,7 +81,12 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
     if (epoch == _epochVisto) return;
     _epochVisto = epoch;
     if (!mounted) return;
-    unawaited(_cargar());
+    // Otro hijo: lo ya pintado no le pertenece.
+    setState(() {
+      _dias = null;
+      _porFecha = const {};
+    });
+    unawaited(_cargar(forzar: true));
   }
 
   Future<void> _cambiarHijoDesdeChip() async {
@@ -83,18 +97,27 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
     // Recarga vía listener de estudianteActivoEpoch (evita doble fetch).
   }
 
-  Future<void> _cargar() async {
+  /// Resuelve el hijo activo y trae su mes.
+  ///
+  /// [forzar] solo se pide cuando hay motivo (cambio de hijo o pull-to-refresh):
+  /// antes se releía perfil y lista de hijos en cada entrada a la pestaña, tres
+  /// viajes encadenados al servidor para pintar lo mismo.
+  Future<void> _cargar({bool forzar = false}) async {
+    final repo = sl<PerfilRepository>();
+
+    // Si ya se sabe de quién son los datos, el mes viaja a la vez que el perfil.
+    final idConocido = forzar ? null : repo.estudianteActivoIdCacheado;
+    final mesEnVuelo =
+        idConocido == null ? null : _pedirMes(idConocido, _mes, forzar: forzar);
+
     setState(() {
       _cargando = true;
       _error = null;
     });
     try {
-      final repo = sl<PerfilRepository>();
-      // Siempre relee el activo: IndexedStack conserva State y el id cacheado
-      // quedaba desfasado tras cambiar de hijo en Perfil u otra pestaña.
       final resultados = await Future.wait([
-        repo.obtener(forzar: true),
-        repo.estudiantes(forzar: true),
+        repo.obtener(forzar: forzar),
+        repo.estudiantes(forzar: forzar),
       ]);
       final perfil = resultados[0] as Perfil;
       final hijos = resultados[1] as List<EstudianteVinculado>;
@@ -123,36 +146,21 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
         });
       }
       if (id == null) {
+        mesEnVuelo?.ignore();
         setState(() {
           _error = 'Selecciona un estudiante en Perfil.';
           _cargando = false;
         });
         return;
       }
-      final dias = await sl<AsistenciasApi>().mes(
-        estudianteId: id,
-        anio: _mes.year,
-        mes: _mes.month,
-      );
-      setState(() {
-        _dias = dias;
-        _hijo = hijo;
-        _estudianteId = id;
-        _porFecha = {
-          for (final d in dias) d.fecha: d,
-        };
-        _cargando = false;
-        if (_seleccionado == null ||
-            _seleccionado!.year != _mes.year ||
-            _seleccionado!.month != _mes.month) {
-          final hoy = DateTime.now();
-          if (hoy.year == _mes.year && hoy.month == _mes.month) {
-            _seleccionado = DateTime(hoy.year, hoy.month, hoy.day);
-          } else {
-            _seleccionado = DateTime(_mes.year, _mes.month, 1);
-          }
-        }
-      });
+      final List<DiaAsistencia> dias;
+      if (mesEnVuelo != null && id == idConocido) {
+        dias = await mesEnVuelo;
+      } else {
+        mesEnVuelo?.ignore();
+        dias = await _pedirMes(id, _mes, forzar: forzar);
+      }
+      _aplicarMes(dias, hijo: hijo, estudianteId: id);
     } on DioException catch (e) {
       setState(() {
         _error = ApiError.deDio(e).mensaje;
@@ -164,6 +172,89 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
         _cargando = false;
       });
     } catch (_) {
+      setState(() {
+        _error = 'No se pudieron cargar las asistencias. Inténtalo de nuevo.';
+        _cargando = false;
+      });
+    }
+  }
+
+  Future<List<DiaAsistencia>> _pedirMes(
+    int estudianteId,
+    DateTime mes, {
+    bool forzar = false,
+  }) async {
+    final clave = '$estudianteId-${mes.year}-${mes.month}';
+    final guardado = _mesesEnMemoria[clave];
+    if (!forzar && guardado != null && guardado.vigente) {
+      return guardado.dias;
+    }
+    final dias = await sl<AsistenciasApi>().mes(
+      estudianteId: estudianteId,
+      anio: mes.year,
+      mes: mes.month,
+    );
+    _mesesEnMemoria[clave] = _MesCacheado(dias, esMesEnCurso(mes));
+    return dias;
+  }
+
+  static bool esMesEnCurso(DateTime mes) {
+    final hoy = DateTime.now();
+    return mes.year == hoy.year && mes.month == hoy.month;
+  }
+
+  void _aplicarMes(
+    List<DiaAsistencia> dias, {
+    required EstudianteVinculado? hijo,
+    required int estudianteId,
+  }) {
+    if (!mounted) return;
+    setState(() {
+      _dias = dias;
+      _hijo = hijo ?? _hijo;
+      _estudianteId = estudianteId;
+      _porFecha = {
+        for (final d in dias) d.fecha: d,
+      };
+      _cargando = false;
+      if (_seleccionado == null ||
+          _seleccionado!.year != _mes.year ||
+          _seleccionado!.month != _mes.month) {
+        final hoy = DateTime.now();
+        if (hoy.year == _mes.year && hoy.month == _mes.month) {
+          _seleccionado = DateTime(hoy.year, hoy.month, hoy.day);
+        } else {
+          _seleccionado = DateTime(_mes.year, _mes.month, 1);
+        }
+      }
+    });
+  }
+
+  /// Trae otro mes del mismo hijo, sin repetir perfil ni lista de hijos.
+  Future<void> _cargarSoloMes(int estudianteId) async {
+    setState(() {
+      _cargando = true;
+      _error = null;
+      _dias = null;
+      _porFecha = const {};
+    });
+    try {
+      final dias = await _pedirMes(estudianteId, _mes);
+      _aplicarMes(dias, hijo: _hijo, estudianteId: estudianteId);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = ApiError.deDio(e).mensaje;
+        _cargando = false;
+      });
+    } on ApiError catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.mensaje;
+        _cargando = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         _error = 'No se pudieron cargar las asistencias. Inténtalo de nuevo.';
         _cargando = false;
@@ -195,7 +286,9 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
 
   void _cambiarMes(int delta) {
     setState(() => _mes = DateTime(_mes.year, _mes.month + delta));
-    _cargar();
+    final id = _estudianteId;
+    // Cambiar de mes no cambia de hijo: solo hace falta el mes nuevo.
+    unawaited(id == null ? _cargar() : _cargarSoloMes(id));
   }
 
   @override
@@ -203,7 +296,7 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
     final mesLabel = _fmtMes.format(_mes);
 
     return Scaffold(
-      backgroundColor: AppTheme.fondo,
+      backgroundColor: context.asis.fondo,
       body: Stack(
         children: [
           const FondoAsiscole(estilo: FondoEstilo.asistencias),
@@ -220,7 +313,7 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
                       style:
                           Theme.of(context).textTheme.headlineMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
-                                color: AppTheme.texto,
+                                color: context.asis.texto,
                               ),
                     ),
                   ),
@@ -258,24 +351,24 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppTheme.blanco,
+                  color: context.asis.superficie,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppTheme.borde),
+                  border: Border.all(color: context.asis.borde),
                 ),
                 child: Row(
                   children: [
                     IconButton(
                       onPressed: () => _cambiarMes(-1),
                       icon: const Icon(Icons.chevron_left),
-                      color: AppTheme.moradoPrincipal,
+                      color: context.asis.morado,
                     ),
                     Expanded(
                       child: Text(
                         mesLabel[0].toUpperCase() + mesLabel.substring(1),
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: AppTheme.texto,
+                          color: context.asis.texto,
                           fontSize: 16,
                         ),
                       ),
@@ -283,7 +376,7 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
                     IconButton(
                       onPressed: () => _cambiarMes(1),
                       icon: const Icon(Icons.chevron_right),
-                      color: AppTheme.moradoPrincipal,
+                      color: context.asis.morado,
                     ),
                   ],
                 ),
@@ -291,57 +384,119 @@ class _AsistenciasPageState extends State<AsistenciasPage> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: _cargando
-                  ? const PantallaCargaAsiscole(mensaje: 'Cargando asistencias…')
-                  : _error != null
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(_error!, textAlign: TextAlign.center),
-                                const SizedBox(height: 16),
-                                FilledButton(
-                                  onPressed: _cargar,
-                                  child: const Text('Reintentar'),
-                                ),
-                              ],
+              child: _error != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!, textAlign: TextAlign.center),
+                            const SizedBox(height: 16),
+                            FilledButton(
+                              onPressed: () => unawaited(_cargar(forzar: true)),
+                              child: const Text('Reintentar'),
                             ),
-                          ),
-                        )
-                      : RefreshIndicator(
-                          onRefresh: _cargar,
-                          child: ListView(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                            children: [
-                              _CalendarioMes(
-                                mes: _mes,
-                                porFecha: _porFecha,
-                                seleccionado: _seleccionado,
-                                onSeleccionar: (d) =>
-                                    setState(() => _seleccionado = d),
-                              ),
-                              const SizedBox(height: 16),
-                              if (!_hayRegistrosReales)
-                                const EmptyStateAsiscole(
-                                  mensaje:
-                                      'Todavía no hay llegadas ni salidas este mes. '
-                                      'Cuando el colegio registre una entrada o '
-                                      'salida, el día se marcará en el calendario '
-                                      'y verás el detalle aquí abajo.',
-                                  mostrarLogo: false,
-                                )
-                              else
-                                _PanelDia(dia: _diaSeleccionado, fecha: _seleccionado),
-                            ],
-                          ),
+                          ],
                         ),
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () => _cargar(forzar: true),
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        children: [
+                          // La rejilla se queda en pantalla mientras llegan los
+                          // datos: sustituirla por un spinner hacía que cada
+                          // cambio de mes pareciera una recarga entera.
+                          _CalendarioMes(
+                            mes: _mes,
+                            porFecha: _porFecha,
+                            seleccionado: _seleccionado,
+                            onSeleccionar: (d) =>
+                                setState(() => _seleccionado = d),
+                          ),
+                          const SizedBox(height: 16),
+                          if (_cargando)
+                            const _PanelCargando()
+                          else if (!_hayRegistrosReales)
+                            const EmptyStateAsiscole(
+                              mensaje:
+                                  'Todavía no hay llegadas ni salidas este mes. '
+                                  'Cuando el colegio registre una entrada o '
+                                  'salida, el día se marcará en el calendario '
+                                  'y verás el detalle aquí abajo.',
+                              mostrarLogo: false,
+                            )
+                          else
+                            _PanelDia(
+                              dia: _diaSeleccionado,
+                              fecha: _seleccionado,
+                            ),
+                        ],
+                      ),
+                    ),
             ),
           ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MesCacheado {
+  _MesCacheado(this.dias, this.enCurso) : _guardadoEn = DateTime.now();
+
+  final List<DiaAsistencia> dias;
+  final bool enCurso;
+  final DateTime _guardadoEn;
+
+  bool get vigente =>
+      !enCurso || DateTime.now().difference(_guardadoEn) < _ttlMesEnCurso;
+}
+
+/// Hueco del panel del día mientras llegan los datos del mes.
+class _PanelCargando extends StatelessWidget {
+  const _PanelCargando();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.asis.superficie,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.asis.borde),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _BarraFantasma(ancho: 150),
+          SizedBox(height: 14),
+          _BarraFantasma(),
+          SizedBox(height: 10),
+          _BarraFantasma(ancho: 200),
+        ],
+      ),
+    );
+  }
+}
+
+class _BarraFantasma extends StatelessWidget {
+  const _BarraFantasma({this.ancho});
+
+  final double? ancho;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: ancho,
+      height: 12,
+      decoration: BoxDecoration(
+        color: context.asis.borde,
+        borderRadius: BorderRadius.circular(6),
       ),
     );
   }
@@ -374,9 +529,9 @@ class _CalendarioMes extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.blanco,
+        color: context.asis.superficie,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borde),
+        border: Border.all(color: context.asis.borde),
       ),
       child: Column(
         children: [
@@ -387,8 +542,8 @@ class _CalendarioMes extends StatelessWidget {
                   child: Text(
                     l,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppTheme.textoSecundario,
+                    style: TextStyle(
+                      color: context.asis.textoSecundario,
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
@@ -404,7 +559,7 @@ class _CalendarioMes extends StatelessWidget {
                 children: [
                   for (var c = 0; c < 7; c++)
                     Expanded(
-                      child: _celda(f * 7 + c, offset, diasEnMes),
+                      child: _celda(context, f * 7 + c, offset, diasEnMes),
                     ),
                 ],
               ),
@@ -414,7 +569,7 @@ class _CalendarioMes extends StatelessWidget {
     );
   }
 
-  Widget _celda(int index, int offset, int diasEnMes) {
+  Widget _celda(BuildContext context, int index, int offset, int diasEnMes) {
     final diaNum = index - offset + 1;
     if (diaNum < 1 || diaNum > diasEnMes) {
       return const SizedBox(height: 44);
@@ -431,11 +586,11 @@ class _CalendarioMes extends StatelessWidget {
     Color? borde;
     if (registro != null) {
       borde = switch (registro.estado) {
-        'a_tiempo' => AppTheme.celeste,
-        'tarde' => AppTheme.ambar,
-        'falta' => AppTheme.moradoPrincipal,
+        'a_tiempo' => context.asis.celeste,
+        'tarde' => context.asis.ambarIncidencia,
+        'falta' => context.asis.morado,
         _ => (registro.horaEntrada != null || registro.horaSalida != null)
-            ? AppTheme.moradoClaro
+            ? context.asis.moradoClaro
             : null,
       };
     }
@@ -452,10 +607,10 @@ class _CalendarioMes extends StatelessWidget {
               width: sel ? 40 : 36,
               height: sel ? 40 : 36,
               decoration: BoxDecoration(
-                color: sel ? AppTheme.moradoPrincipal : Colors.transparent,
+                color: sel ? context.asis.morado : Colors.transparent,
                 shape: BoxShape.circle,
                 border: sel
-                    ? Border.all(color: AppTheme.celeste, width: 3)
+                    ? Border.all(color: context.asis.celeste, width: 3)
                     : (borde != null
                         ? Border.all(color: borde, width: 2)
                         : null),
@@ -464,7 +619,7 @@ class _CalendarioMes extends StatelessWidget {
               child: Text(
                 '$diaNum',
                 style: TextStyle(
-                  color: sel ? Colors.white : AppTheme.texto,
+                  color: sel ? context.asis.sobreMorado : context.asis.texto,
                   fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
                   fontSize: sel ? 15 : 14,
                 ),
@@ -500,10 +655,10 @@ class _PanelDia extends StatelessWidget {
       children: [
         Text(
           titulo,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 16,
-            color: AppTheme.texto,
+            color: context.asis.texto,
           ),
         ),
         const SizedBox(height: 12),
@@ -512,13 +667,13 @@ class _PanelDia extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppTheme.blanco,
+              color: context.asis.superficie,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.borde),
+              border: Border.all(color: context.asis.borde),
             ),
-            child: const Text(
+            child: Text(
               'Sin registro este día',
-              style: TextStyle(color: AppTheme.textoSecundario),
+              style: TextStyle(color: context.asis.textoSecundario),
             ),
           )
         else ...[
@@ -529,7 +684,7 @@ class _PanelDia extends StatelessWidget {
                   titulo: 'Entrada',
                   valor: dia!.horaEntrada ?? '—',
                   icono: Icons.login_rounded,
-                  acento: AppTheme.celeste,
+                  acento: context.asis.celeste,
                 ),
               ),
               const SizedBox(width: 10),
@@ -538,7 +693,7 @@ class _PanelDia extends StatelessWidget {
                   titulo: 'Salida',
                   valor: dia!.horaSalida ?? '—',
                   icono: Icons.logout_rounded,
-                  acento: AppTheme.moradoSecundario,
+                  acento: context.asis.moradoSecundario,
                 ),
               ),
             ],
@@ -548,16 +703,16 @@ class _PanelDia extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppTheme.blanco,
+              color: context.asis.superficie,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.borde),
+              border: Border.all(color: context.asis.borde),
             ),
             child: Row(
               children: [
-                const Text(
+                Text(
                   'Estado',
                   style: TextStyle(
-                    color: AppTheme.textoSecundario,
+                    color: context.asis.textoSecundario,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -590,9 +745,9 @@ class _MiniCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppTheme.blanco,
+        color: context.asis.superficie,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borde),
+        border: Border.all(color: context.asis.borde),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -601,8 +756,8 @@ class _MiniCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             titulo,
-            style: const TextStyle(
-              color: AppTheme.textoSecundario,
+            style: TextStyle(
+              color: context.asis.textoSecundario,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -610,8 +765,8 @@ class _MiniCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             valor,
-            style: const TextStyle(
-              color: AppTheme.texto,
+            style: TextStyle(
+              color: context.asis.texto,
               fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
@@ -638,10 +793,10 @@ class _LeyendaAsistencia extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               t,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textoSecundario,
+                color: context.asis.textoSecundario,
               ),
             ),
           ],
@@ -650,9 +805,9 @@ class _LeyendaAsistencia extends StatelessWidget {
       spacing: 14,
       runSpacing: 6,
       children: [
-        item(AppTheme.celeste, 'A tiempo'),
-        item(AppTheme.ambar, 'Tarde'),
-        item(AppTheme.moradoPrincipal, 'Falta'),
+        item(context.asis.celeste, 'A tiempo'),
+        item(context.asis.ambarIncidencia, 'Tarde'),
+        item(context.asis.morado, 'Falta'),
       ],
     );
   }
@@ -675,9 +830,9 @@ class _ResumenMes extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: AppTheme.blanco,
+              color: context.asis.superficie,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.borde),
+              border: Border.all(color: context.asis.borde),
             ),
             child: Column(
               children: [
@@ -691,10 +846,10 @@ class _ResumenMes extends StatelessWidget {
                 ),
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textoSecundario,
+                    color: context.asis.textoSecundario,
                   ),
                 ),
               ],
@@ -703,11 +858,11 @@ class _ResumenMes extends StatelessWidget {
         );
     return Row(
       children: [
-        cell('A tiempo', aTiempo, AppTheme.celeste),
+        cell('A tiempo', aTiempo, context.asis.celeste),
         const SizedBox(width: 8),
-        cell('Tarde', tarde, AppTheme.ambar),
+        cell('Tarde', tarde, context.asis.ambarIncidencia),
         const SizedBox(width: 8),
-        cell('Faltas', falta, AppTheme.moradoPrincipal),
+        cell('Faltas', falta, context.asis.morado),
       ],
     );
   }

@@ -1,10 +1,11 @@
 # Fase 4 — Estrés y rendimiento
 
-Fecha: 2026-08-13.
+Fecha: 2026-08-13. Carga en el dedicado: **2026-09-01**
+([`rendimiento-dedicado-2026-09-01.md`](rendimiento-dedicado-2026-09-01.md)).
 
-**No se ejecutó carga.** Dos razones: `k6` no está instalado en esta máquina, y el
-único entorno con datos reales es producción, que comparte VPS con el SIE del
-colegio. La prueba queda preparada y esperando tu OK con una ventana horaria.
+**Carga ejecutada** en `asiscole-ded1` (Gunicorn 8×4). 40 VU de lectura pasan;
+200/800 VU en bucle encolan (0 errores, p95 alto). 800 ingestas sintéticas
+pasan en ~9 s. Detalle y veredicto en el informe del 1-sep.
 
 ---
 
@@ -12,12 +13,12 @@ colegio. La prueba queda preparada y esperando tu OK con una ventana horaria.
 
 Aquí está el hallazgo más importante de la fase, y es de método:
 
-| | Opción B (para lo que se escribieron los scripts) | Producción hoy |
+| | Opción B (scripts) | Dedicado 2026-09-01 |
 | --- | --- | --- |
-| Host | VPS dedicado ~8 CPU / 32 GB | Hetzner **compartido con el SIE**, ~4 vCPU / 8 GB |
-| Gunicorn | 8 workers × 4 threads = **32** peticiones en paralelo | 3 × 2 = **6** |
-| Celery | 6 | 2 |
-| Redis | 2 GB | 256 MB |
+| Host | ~8 CPU / 32 GB | **8 CPU / 62 GB**, SIE en el mismo host |
+| Gunicorn | 8×4 = **32** HTTP | 8×4 (antes 3×2) |
+| Celery | 6 | 6 |
+| Redis | 2 GB | 2 GB |
 
 Los dos scripts de carga fijan el mismo umbral (`http_req_duration p(95) < 800 ms`,
 fallos < 1-2 %) y el de 1000 VU lo dice explícitamente en su cabecera: está pensado

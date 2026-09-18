@@ -42,6 +42,7 @@ urlpatterns = [
     # Pagina publica: Play exige una URL web para pedir la eliminacion de cuenta,
     # ademas del boton dentro de la app. No recibe ni muestra datos personales.
     path("eliminar-cuenta", paginas.eliminar_cuenta, name="eliminar-cuenta"),
+    path("privacidad", paginas.privacidad, name="privacidad"),
     path("v0.1/", include("apps.cuentas.urls")),
     path("v0.1/", include("apps.directorio.urls")),
     path("v0.1/", include("apps.mensajeria.urls")),

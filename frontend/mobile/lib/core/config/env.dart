@@ -53,12 +53,16 @@ class Env {
 
   /// Soporte del canal. Antes de iniciar sesión la app no sabe de qué colegio es
   /// el apoderado, así que el contacto es único y desde ahí se deriva al colegio.
-  static const String correoSoporte = 'soporte@asiscole.com';
+  static const String correoSoporte = 'trabajoandre4@gmail.com';
 
   /// Página pública con el procedimiento de eliminación de cuenta (Play la exige
   /// además del botón en Perfil).
   static const String urlEliminarCuenta =
       'https://jeanpiaget.asiscole.com/canal-api/eliminar-cuenta';
+
+  /// Política de privacidad pública (Play la exige en la ficha).
+  static const String urlPrivacidad =
+      'https://jeanpiaget.asiscole.com/canal-api/privacidad';
 
   /// Ficha de Play. `in_app_update` no funciona en APK de sideload; el botón
   /// de actualizar cae aquí.

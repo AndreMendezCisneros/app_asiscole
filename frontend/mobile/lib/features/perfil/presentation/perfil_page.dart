@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/env.dart';
 import '../../../core/di/injector.dart';
+import '../../../core/error/api_error.dart';
+import '../../../core/error/error_codes.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/storage/local_db.dart';
 import '../../../core/theme/asis_colors.dart';
@@ -208,12 +212,36 @@ class _PerfilPageState extends State<PerfilPage> {
       if (!mounted) return;
       // `cerrarSesion` borra los tokens y la caché local de mensajes.
       await context.read<AuthCubit>().cerrarSesion();
+    } on ApiError catch (e) {
+      if (!mounted) return;
+      final texto = e.codigo == CodigosError.vinculoNoEncontrado
+          ? 'El documento no coincide con tu cuenta. '
+              'Revísalo o pide la baja por la página web.'
+          : e.mensaje;
+      _avisarBajaFallida(texto);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo eliminar la cuenta.')),
+      _avisarBajaFallida(
+        'No se pudo eliminar la cuenta. Inténtalo de nuevo o usa la página web.',
       );
     }
+  }
+
+  void _avisarBajaFallida(String texto) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(texto),
+        action: SnackBarAction(
+          label: 'Ver página',
+          onPressed: () {
+            launchUrl(
+              Uri.parse(Env.urlEliminarCuenta),
+              mode: LaunchMode.externalApplication,
+            );
+          },
+        ),
+      ),
+    );
   }
 
   @override

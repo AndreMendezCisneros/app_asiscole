@@ -23,7 +23,7 @@ workflows:
       vars:
         BUNDLE_ID: pe.asiscole.asiscoleApp
         # Apple ID numérico de la app en App Store Connect (App Information).
-        APP_STORE_APP_ID: "0000000000"
+        APP_STORE_APP_ID: "6820387698"
       ios_signing:
         distribution_type: app_store
         bundle_identifier: pe.asiscole.asiscoleApp

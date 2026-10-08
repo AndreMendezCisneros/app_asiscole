@@ -48,6 +48,18 @@ def test_version_app_sin_cabecera_no_bloquea(api):
 
 
 @pytest.mark.django_db
+def test_version_app_ios_sembrada_sin_ficha(api):
+    r = api.get("/v0.1/sistema/version-app", {"plataforma": "ios"}, HTTP_X_APP_VERSION="1")
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert cuerpo["plataforma"] == "ios"
+    assert cuerpo["actualizacion_obligatoria"] is False
+    assert cuerpo["actualizacion_disponible"] is False
+    # Sin ficha en la App Store no se ofrece un enlace (y nunca el de Play).
+    assert cuerpo["url_tienda"] is None
+
+
+@pytest.mark.django_db
 def test_version_app_plataforma_invalida(api):
     r = api.get("/v0.1/sistema/version-app", {"plataforma": "windows"})
     assert r.status_code == 400

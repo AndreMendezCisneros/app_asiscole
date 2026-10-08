@@ -83,8 +83,12 @@ debe explicar en lenguaje llano qué datos se usan, para qué y cuánto tiempo s
 
 ### Apple App Store
 
-- [ ] Privacy Nutrition Labels coherentes con el tratamiento real
-- [ ] Flujo de eliminación de cuenta visible dentro de la app (requisito obligatorio)
+Pasos completos en `docs/ios/despliegue-ios.md`.
+
+- [x] Manifiesto de privacidad (`ios/Runner/PrivacyInfo.xcprivacy`) sin rastreo
+- [x] Flujo de eliminación de cuenta visible dentro de la app (Perfil → Eliminar cuenta)
+- [x] Declaración de cifrado de exportación (`ITSAppUsesNonExemptEncryption = false`)
+- [ ] Privacy Nutrition Labels coherentes con el manifiesto y con este documento
 - [ ] Descripción clara del mecanismo de login, que es inusual y puede levantar dudas
 - [ ] Cuenta de demostración para el equipo de revisión
 
@@ -107,4 +111,9 @@ aparecen en el conmutador de apps recientes. Es una decisión explícita, no un 
 
 **Copia de seguridad de Android.** Desactivada (`allowBackup=false`). La caché local con
 nombres de menores no va a Drive ni se transfiere entre dispositivos.
+
+**Copia de seguridad de iOS.** La carpeta Documents, donde vive la caché, se excluye del
+respaldo de iCloud al arrancar. Los tokens van en el Keychain con
+`first_unlock_this_device`, que no se restaura en otro iPhone, y se borran en la primera
+ejecución tras reinstalar, porque en iOS el Keychain sobrevive a la desinstalación.
 

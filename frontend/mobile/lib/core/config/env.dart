@@ -69,6 +69,12 @@ class Env {
   static const String urlFichaPlay =
       'https://play.google.com/store/apps/details?id=pe.asiscole.asiscole_app';
 
+  /// Ficha de la App Store. Vacía hasta que exista; mientras tanto manda la
+  /// `url_tienda` que devuelva el canal. Se fija al compilar con
+  /// `--dart-define=APP_STORE_URL=https://apps.apple.com/app/id...`.
+  static const String urlFichaAppStore =
+      String.fromEnvironment('APP_STORE_URL', defaultValue: '');
+
   /// TTL de una solicitud de transferencia de sesión (contrato: 5 minutos).
   static const Duration ttlTransferencia = Duration(minutes: 5);
 

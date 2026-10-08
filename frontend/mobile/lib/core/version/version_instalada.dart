@@ -1,6 +1,7 @@
 import 'package:package_info_plus/package_info_plus.dart';
 
-/// `versionCode` del APK instalado, leído fuera del camino de arranque.
+/// Número de build instalado (`versionCode` en Android, `CFBundleVersion` en
+/// iOS), leído fuera del camino de arranque.
 ///
 /// Resolverlo pide un salto al canal de plataforma y antes se hacía dentro de
 /// `configurarInyector()`, es decir, antes del primer frame. El backend es

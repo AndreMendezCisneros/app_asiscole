@@ -15,6 +15,7 @@ import 'core/di/injector.dart';
 import 'core/push/avisos_vistos.dart';
 import 'core/push/firebase_init.dart';
 import 'core/push/servicio_push.dart';
+import 'core/storage/secure_storage.dart';
 import 'features/auth/presentation/auth_cubit.dart';
 
 /// Handler en isolate de background (FCM data / notificación).
@@ -96,6 +97,7 @@ Future<void> main() async {
   Intl.defaultLocale = Env.locale;
 
   await configurarInyector();
+  await sl<SecureStorage>().olvidarSiEsInstalacionNueva();
 
   // La sesión se restaura en segundo plano: el router muestra `ArranquePage`
   // mientras `Authenticating.restaurando` esté vigente, así que no hay flash de

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -118,9 +119,21 @@ class ServicioPush {
   Future<String?> token() async {
     if (!_activo) return null;
     try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await _esperarTokenApns();
+      }
       return await _mensajeria?.getToken();
     } on Object {
       return null;
+    }
+  }
+
+  /// En iOS `getToken()` falla con `apns-token-not-set` si APNs aún no
+  /// entregó su token, cosa habitual en el primer arranque tras el permiso.
+  Future<void> _esperarTokenApns() async {
+    for (var intento = 0; intento < 10; intento++) {
+      if (await _mensajeria?.getAPNSToken() != null) return;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
     }
   }
 

@@ -9,7 +9,7 @@ import 'version_app_api.dart';
 
 /// Intenta actualizar. `in_app_update` solo funciona si el APK vino de Play;
 /// en sideload abre la ficha o, si tampoco hay tienda, deja que la UI avise
-/// que hay que pedir el APK al colegio.
+/// que hay que pedir el APK al colegio. En iOS solo hay ficha de App Store.
 class ActualizadorApp {
   const ActualizadorApp._();
 
@@ -17,6 +17,7 @@ class ActualizadorApp {
     required PoliticaVersion politica,
     required bool inmediata,
   }) async {
+    final esIos = !kIsWeb && Platform.isIOS;
     if (!kIsWeb && Platform.isAndroid) {
       try {
         final info = await InAppUpdate.checkForUpdate();
@@ -33,10 +34,8 @@ class ActualizadorApp {
       }
     }
 
-    final crudo = (politica.urlTienda ?? '').trim().isNotEmpty
-        ? politica.urlTienda!.trim()
-        : Env.urlFichaPlay;
-    final uri = Uri.tryParse(crudo);
+    final crudo = urlTienda(esIos: esIos, urlServidor: politica.urlTienda);
+    final uri = crudo.isEmpty ? null : Uri.tryParse(crudo);
     if (uri != null && await canLaunchUrl(uri)) {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       return ok
@@ -44,6 +43,15 @@ class ActualizadorApp {
           : ResultadoActualizacion.pedirAlColegio;
     }
     return ResultadoActualizacion.pedirAlColegio;
+  }
+
+  /// Ficha a abrir: la del servidor si la hay; si no, la de la tienda propia
+  /// de la plataforma. En iOS nunca se cae a Play.
+  @visibleForTesting
+  static String urlTienda({required bool esIos, String? urlServidor}) {
+    final servidor = (urlServidor ?? '').trim();
+    if (servidor.isNotEmpty) return servidor;
+    return (esIos ? Env.urlFichaAppStore : Env.urlFichaPlay).trim();
   }
 }
 

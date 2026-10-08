@@ -105,8 +105,11 @@ class _ActualizacionObligatoriaPageState
               ),
               const SizedBox(height: 12),
               Text(
-                'Si no aparece en Play Store, pide el archivo al colegio '
-                '(${Env.correoSoporte}).',
+                plataformaActual() == 'ios'
+                    ? 'Si no aparece en la App Store, escribe al colegio '
+                        '(${Env.correoSoporte}).'
+                    : 'Si no aparece en Play Store, pide el archivo al colegio '
+                        '(${Env.correoSoporte}).',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,

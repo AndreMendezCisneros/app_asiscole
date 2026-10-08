@@ -30,7 +30,7 @@ TAMANO_MULTICAST = 500
 
 
 class ProveedorFCM(ProveedorPush):
-    """Envio a dispositivos Android."""
+    """Envio a dispositivos Android e iOS (iOS via APNs de Firebase)."""
 
     plataforma = "android"
 
@@ -120,6 +120,7 @@ class ProveedorFCM(ProveedorPush):
                         default_vibrate_timings=True,
                     ),
                 ),
+                apns=_config_apns(messaging, mensaje),
             )
             respuesta = messaging.send_each_for_multicast(peticion)
         except Exception as exc:  # noqa: BLE001 — el SDK lanza jerarquias propias
@@ -156,6 +157,23 @@ class ProveedorFCM(ProveedorPush):
             },
         )
         return ResultadoEnvio(enviados=len(destinos), simulado=True)
+
+
+def _config_apns(messaging, mensaje: MensajePush):
+    """Bloque APNs del mensaje FCM: alerta visible con sonido en iOS.
+
+    `apns-collapse-id` admite como mucho 64 bytes; el UUID del mensaje cabe.
+    """
+    return messaging.APNSConfig(
+        headers={
+            "apns-priority": "10",
+            "apns-push-type": "alert",
+            "apns-collapse-id": mensaje.message_id[:64],
+        },
+        payload=messaging.APNSPayload(
+            aps=messaging.Aps(sound="default", mutable_content=False),
+        ),
+    )
 
 
 def _cuerpo_generico(tipo: str) -> str:

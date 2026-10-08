@@ -1,5 +1,12 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
+
 import '../network/api_client.dart';
 import '../network/auth_interceptor.dart';
+
+/// `ios` o `android`, como los acepta `/sistema/version-app`.
+String plataformaActual() => !kIsWeb && Platform.isIOS ? 'ios' : 'android';
 
 /// Respuesta de `GET /sistema/version-app`.
 class PoliticaVersion {
@@ -38,11 +45,11 @@ class VersionAppApi {
 
   final ApiClient _api;
 
-  Future<PoliticaVersion?> consultar({String plataforma = 'android'}) async {
+  Future<PoliticaVersion?> consultar({String? plataforma}) async {
     try {
       final resp = await _api.dio.get<Map<String, dynamic>>(
         '/sistema/version-app',
-        queryParameters: {'plataforma': plataforma},
+        queryParameters: {'plataforma': plataforma ?? plataformaActual()},
         options: OpcionesAuth.con(EsquemaAuth.ninguno),
       );
       final data = resp.data;

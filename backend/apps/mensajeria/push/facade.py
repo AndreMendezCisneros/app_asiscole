@@ -1,7 +1,11 @@
 """Fachada de envio de notificaciones push.
 
-Unifica FCM y APNs detras de una sola llamada: quien envia no sabe (ni le
-importa) en que plataforma esta cada dispositivo. Dos cosas resuelve esta capa:
+Android e iOS salen por FCM: la app registra el token de FCM en ambas
+plataformas y Firebase entrega a Apple con la clave APNs (`.p8`) subida en su
+consola. `ProveedorAPNs` queda como alternativa para envio directo, pero exige
+guardar el token APNs del dispositivo, que la app hoy no registra.
+
+Dos cosas resuelve esta capa:
 
 * **Multicast.** Los tokens se agrupan por plataforma y se mandan en una sola
   peticion por proveedor. En las horas pico (entrada de 07:00 a 08:00 y salida
@@ -20,7 +24,6 @@ from collections.abc import Iterable, Sequence
 
 from django.core.cache import cache
 
-from apps.mensajeria.push.apns import ProveedorAPNs
 from apps.mensajeria.push.base import MensajePush, ProveedorPush, ResultadoEnvio
 from apps.mensajeria.push.fcm import ProveedorFCM
 
@@ -42,9 +45,10 @@ class ServicioPush:
         proveedor_android: ProveedorPush | None = None,
         proveedor_ios: ProveedorPush | None = None,
     ) -> None:
+        fcm = proveedor_android or ProveedorFCM()
         self.proveedores: dict[str, ProveedorPush] = {
-            "android": proveedor_android or ProveedorFCM(),
-            "ios": proveedor_ios or ProveedorAPNs(),
+            "android": fcm,
+            "ios": proveedor_ios or fcm,
         }
 
     def _agrupar(self, tokens: Iterable) -> dict[str, list[str]]:

@@ -1,0 +1,108 @@
+# Codemagic: build iOS firmado y subida a TestFlight.
+# Pasos previos en Apple, Firebase y Codemagic: docs/ios/despliegue-ios.md
+
+workflows:
+  ios-testflight:
+    name: iOS → TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: frontend/mobile
+
+    integrations:
+      # Nombre de la clave API de App Store Connect en Codemagic
+      # (Team settings → Integrations → Developer Portal).
+      app_store_connect: Asiscole ASC
+
+    environment:
+      flutter: 3.41.9
+      xcode: latest
+      cocoapods: default
+      groups:
+        # FIREBASE_OPTIONS_DART_B64 y GOOGLE_SERVICE_INFO_PLIST_B64 (secretos).
+        - firebase_ios
+      vars:
+        BUNDLE_ID: pe.asiscole.asiscoleApp
+        # Apple ID numérico de la app en App Store Connect (App Information).
+        APP_STORE_APP_ID: "0000000000"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: pe.asiscole.asiscoleApp
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "ios-v*"
+          include: true
+
+    scripts:
+      - name: Restaurar configuración Firebase
+        script: |
+          set -euo pipefail
+          echo "$FIREBASE_OPTIONS_DART_B64" | base64 --decode > lib/firebase_options.dart
+          echo "$GOOGLE_SERVICE_INFO_PLIST_B64" | base64 --decode > ios/Runner/GoogleService-Info.plist
+          grep -q "TargetPlatform.iOS" lib/firebase_options.dart \
+            || { echo "firebase_options.dart no tiene la rama iOS"; exit 1; }
+          plutil -lint ios/Runner/GoogleService-Info.plist
+          PLIST_BUNDLE=$(/usr/libexec/PlistBuddy -c "Print :BUNDLE_ID" ios/Runner/GoogleService-Info.plist)
+          [ "$PLIST_BUNDLE" = "$BUNDLE_ID" ] \
+            || { echo "GoogleService-Info.plist es de otro bundle ($PLIST_BUNDLE)"; exit 1; }
+
+      - name: Dependencias
+        script: |
+          set -euo pipefail
+          # Crashlytics sube los dSYM desde Pods/; con Swift Package Manager la
+          # herramienta queda en otra ruta y el paso de dSYM no la encontraría.
+          flutter config --no-enable-swift-package-manager
+          flutter pub get
+          cd ios && pod install --repo-update
+
+      - name: Pruebas
+        script: |
+          flutter analyze --no-fatal-infos
+          flutter test
+
+      - name: Perfiles de firma
+        script: xcode-project use-profiles
+
+      - name: Build IPA
+        script: |
+          set -euo pipefail
+          if [ "$APP_STORE_APP_ID" = "0000000000" ]; then
+            echo "Pon el Apple ID real de la app en APP_STORE_APP_ID"; exit 1
+          fi
+          ULTIMO=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID" 2>/dev/null || echo 0)
+          BUILD_NUMBER=$((ULTIMO + 1))
+          echo "Build number: $BUILD_NUMBER"
+          mkdir -p build/ios/symbols
+          flutter build ipa --release \
+            --build-number="$BUILD_NUMBER" \
+            --dart-define=ASISCOLE_ENV=prod \
+            --obfuscate \
+            --split-debug-info=build/ios/symbols \
+            --export-options-plist=/Users/builder/export_options.plist
+
+      - name: Subir dSYM a Crashlytics
+        script: |
+          set -euo pipefail
+          DSYMS=build/ios/archive/Runner.xcarchive/dSYMs
+          if [ ! -d "$DSYMS" ]; then
+            echo "No hay dSYM en $DSYMS"; exit 1
+          fi
+          ios/Pods/FirebaseCrashlytics/upload-symbols \
+            -gsp ios/Runner/GoogleService-Info.plist \
+            -p ios "$DSYMS"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/Runner.xcarchive/dSYMs/**
+      - build/ios/symbols/**
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Los testers internos lo reciben solos; la revisión para la App Store
+        # se lanza a mano desde App Store Connect.
+        submit_to_testflight: true
+        submit_to_app_store: false

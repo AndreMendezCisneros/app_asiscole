@@ -13,6 +13,8 @@ class DefaultFirebaseOptions {
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
+      case TargetPlatform.iOS:
+        return ios;
       default:
         throw UnsupportedError('Plataforma no configurada.');
     }
@@ -24,5 +26,14 @@ class DefaultFirebaseOptions {
     messagingSenderId: 'TU_PROJECT_NUMBER',
     projectId: 'tu-proyecto-firebase',
     storageBucket: 'tu-proyecto-firebase.appspot.com',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'TU_API_KEY_IOS',
+    appId: '1:TU_PROJECT_NUMBER:ios:TU_APP_ID',
+    messagingSenderId: 'TU_PROJECT_NUMBER',
+    projectId: 'tu-proyecto-firebase',
+    storageBucket: 'tu-proyecto-firebase.appspot.com',
+    iosBundleId: 'pe.asiscole.asiscoleApp',
   );
 }

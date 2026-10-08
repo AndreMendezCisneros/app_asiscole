@@ -95,9 +95,9 @@ workflows:
             -p ios "$DSYMS"
 
     artifacts:
-      - frontend/mobile/build/ios/ipa/*.ipa
-      - frontend/mobile/build/ios/archive/Runner.xcarchive/dSYMs/**
-      - frontend/mobile/build/ios/symbols/**
+      - $CM_BUILD_DIR/frontend/mobile/build/ios/ipa/*.ipa
+      - $CM_BUILD_DIR/frontend/mobile/build/ios/archive/Runner.xcarchive/dSYMs/**
+      - $CM_BUILD_DIR/frontend/mobile/build/ios/symbols/**
       - /tmp/xcodebuild_logs/*.log
 
     publishing:

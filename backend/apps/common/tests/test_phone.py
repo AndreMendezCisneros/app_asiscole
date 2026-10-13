@@ -7,7 +7,13 @@ from __future__ import annotations
 
 import pytest
 
-from apps.common.phone import extraer_telefonos_e164, hash_credencial, normalizar_e164
+from apps.common.phone import (
+    extraer_telefonos_e164,
+    hash_credencial,
+    hash_documento,
+    hash_telefono,
+    normalizar_e164,
+)
 
 
 @pytest.mark.parametrize(
@@ -93,3 +99,16 @@ def test_hash_credencial_distingue_credenciales_distintas():
     # El separador impide que pares distintos concatenen a la misma cadena.
     assert hash_credencial("98765", "432120481234") != hash_credencial("987654321", "20481234")
     assert hash_credencial("987", "654321") != hash_credencial("987654", "321")
+
+
+def test_hash_telefono_es_estable_y_no_revela_el_numero():
+    esperado = hash_telefono("987654321")
+    assert len(esperado) == 64
+    assert "987654321" not in esperado
+    assert hash_telefono("+51 987 654 321") == esperado
+
+
+def test_hash_documento_ignora_espacios_y_mayusculas():
+    esperado = hash_documento("70123456")
+    assert hash_documento(" 70123456 ") == esperado
+    assert hash_documento("70123456") != hash_documento("70123457")

@@ -60,8 +60,9 @@ cuenta cuando quieras, desde la propia aplicacion.</p>
 
 <div class="aviso">
   <strong>La eliminacion no se puede deshacer.</strong> Dejaras de recibir los
-  avisos del colegio y, si quieres volver a recibirlos, tendras que registrarte
-  de nuevo.
+  avisos del colegio. Ese numero de telefono no podra volver a entrar: al
+  intentarlo veras el aviso de que no hay un estudiante registrado con esos
+  datos. Otro apoderado, con otro telefono, sigue pudiendo usar la aplicacion.
 </div>
 
 <h2>Que se elimina</h2>
@@ -145,8 +146,11 @@ desactivado: la cache no llega a Drive.</p>
       <a href="{URL_ELIMINAR}">{URL_ELIMINAR}</a>.</li>
   <li><strong>Oposicion:</strong> cierre de sesion y/o eliminacion de cuenta.</li>
 </ul>
-<p>La eliminacion anonimiza al apoderado, cierra sesiones y apaga el push. El
-expediente academico del estudiante pertenece al colegio y no se borra por esta via.</p>
+<p>La eliminacion anonimiza al apoderado, cierra sesiones y apaga el push. Ese
+telefono no puede volver a iniciar sesion: la app muestra el mismo aviso de que
+no hay un estudiante registrado con esos datos. El expediente academico del
+estudiante pertenece al colegio y no se borra por esta via. Otro telefono
+vinculado al mismo estudiante no se bloquea.</p>
 
 <h2>4. Seguridad</h2>
 <p>Comunicaciones cifradas (HTTPS/TLS). Tokens en el almacen seguro del telefono.

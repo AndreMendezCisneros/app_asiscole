@@ -59,6 +59,9 @@ entre dispositivos.
 La eliminación de cuenta revoca sesiones, desactiva el push, anonimiza los datos del
 apoderado, **anonimiza sus mensajes** (el `texto` y la `metadata` llevan el nombre del
 estudiante, así que no esperan los 24 meses de retención) y borra la caché del dispositivo.
+El teléfono de esa cuenta no puede volver a entrar: el login responde el mismo aviso de
+estudiante no encontrado (`STUDENT_LINK_NOT_FOUND`) y no crea otra fila. Otro teléfono
+vinculado al mismo estudiante (el otro papá) no se bloquea.
 
 El expediente académico del estudiante pertenece al colegio y no se borra por esta vía: es un
 dato del centro educativo, no del canal.

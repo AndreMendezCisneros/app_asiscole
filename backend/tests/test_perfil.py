@@ -5,7 +5,14 @@ from __future__ import annotations
 import pytest
 
 from apps.common.errors import StudentLinkNotFound
-from apps.cuentas.models import CUENTA_ELIMINADA, SESION_ACTIVA, Apoderado, SesionActiva
+from apps.common.phone import hash_documento, hash_telefono
+from apps.cuentas.models import (
+    CUENTA_ELIMINADA,
+    SESION_ACTIVA,
+    Apoderado,
+    BajaCuenta,
+    SesionActiva,
+)
 from apps.cuentas.perfil_services import eliminar_cuenta, listar_estudiantes, obtener_perfil
 from apps.directorio.models import VINCULO_ACTIVO, Directorio
 from apps.mensajeria.models import TEXTO_ANONIMIZADO, TIPO_ENTRADA, Mensaje
@@ -67,6 +74,9 @@ def test_eliminar_cuenta_anonimiza_y_revoca():
     assert apo.estado == CUENTA_ELIMINADA
     assert apo.telefono.startswith("deleted:")
     assert SesionActiva.objects.filter(apoderado=apo, estado=SESION_ACTIVA).count() == 0
+    baja = BajaCuenta.objects.get()
+    assert baja.hash_telefono == hash_telefono("+51988888888")
+    assert baja.hash_documento == hash_documento("70333333")
 
 
 @pytest.mark.django_db

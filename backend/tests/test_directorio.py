@@ -288,6 +288,31 @@ def test_la_reconciliacion_da_de_baja_lo_que_ya_no_existe(colegios, monkeypatch,
 
 
 @pytest.mark.django_db
+def test_la_reconciliacion_no_reactiva_un_telefono_dado_de_baja(
+    colegios, monkeypatch, settings
+):
+    """Si el apoderado eliminó la cuenta, el job nocturno no rearma el vínculo."""
+    from apps.common.phone import hash_documento, hash_telefono
+    from apps.cuentas.models import BajaCuenta
+    from apps.directorio import tasks
+
+    settings.SCHOOL_TENANTS = {TENANT: "Jean Piaget"}
+    BajaCuenta.objects.create(
+        hash_telefono=hash_telefono(TELEFONO),
+        hash_documento=hash_documento(DOCUMENTO),
+    )
+    monkeypatch.setattr(
+        "apps.directorio.repositorio.iterar_directorio",
+        lambda tenant: iter([crear_vinculo()]),
+    )
+
+    resumen = tasks.reconciliar_directorio()
+
+    assert resumen["upserts"] == 0
+    assert not Directorio.objects.filter(telefono=TELEFONO).exists()
+
+
+@pytest.mark.django_db
 def test_el_precalentado_carga_la_cache(vinculo_en_directorio):
     """Antes de la jornada la cache queda lista para el pico de logins."""
     from apps.directorio import tasks
@@ -299,9 +324,14 @@ def test_el_precalentado_carga_la_cache(vinculo_en_directorio):
 
 
 @pytest.mark.django_db
-def test_los_vinculos_inactivos_no_habilitan_login(api, vinculo_en_directorio):
+def test_los_vinculos_inactivos_no_habilitan_login(
+    api, vinculo_en_directorio, colegios, monkeypatch
+):
     """Un vinculo dado de baja no sirve para entrar."""
     Directorio.objects.update(estado_vinculo=VINCULO_INACTIVO)
+    monkeypatch.setattr(
+        "apps.directorio.repositorio.consultar_colegio", lambda tenant, telefono: []
+    )
 
     respuesta = api.post(URL_LOGIN, cuerpo_login(), format="json")
 

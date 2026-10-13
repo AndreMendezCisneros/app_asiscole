@@ -34,7 +34,7 @@ Los mensajes de la base central se purgan o anonimizan a los **24 meses** de su 
 - **Cancelación:** en la app, Perfil → Eliminar mi cuenta, o en https://jeanpiaget.asiscole.com/canal-api/eliminar-cuenta
 - **Oposición:** cierre de sesión y/o eliminación de cuenta.
 
-La eliminación anonimiza al apoderado, cierra sesiones y apaga el push. El expediente académico del estudiante pertenece al colegio y no se borra por esta vía.
+La eliminación anonimiza al apoderado, cierra sesiones y apaga el push. Ese teléfono no puede volver a iniciar sesión: la app muestra el mismo aviso de que no hay un estudiante registrado con esos datos. El expediente académico del estudiante pertenece al colegio y no se borra por esta vía. Otro teléfono vinculado al mismo estudiante no se bloquea.
 
 ## 4. Seguridad
 

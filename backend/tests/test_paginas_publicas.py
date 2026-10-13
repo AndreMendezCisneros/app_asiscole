@@ -16,6 +16,7 @@ def test_eliminar_cuenta_es_publica_y_explica_el_procedimiento():
     assert "no se puede deshacer" in cuerpo
     assert NOMBRE_APP in cuerpo
     assert CORREO_SOPORTE in cuerpo
+    assert "no podra volver a entrar" in cuerpo
 
 
 def test_eliminar_cuenta_no_pide_datos_del_estudiante():

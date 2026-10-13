@@ -139,3 +139,20 @@ def hash_credencial(telefono: str, codigo: str) -> str:
     # darian la misma cadena.
     material = f"{telefono_normalizado}\x1f{codigo_normalizado}".encode("utf-8")
     return hashlib.sha256(material).hexdigest()
+
+
+def hash_telefono(telefono: str) -> str:
+    """SHA-256 del teléfono ya en E.164, para `asis_baja_cuenta`.
+
+    El número no se guarda en claro: esta clave solo sirve para rechazar un
+    reingreso. El valor se normaliza igual que el login, para que
+    `987654321` y `+51 987 654 321` produzcan el mismo hash.
+    """
+    telefono_normalizado = normalizar_e164(telefono or "") or _limpiar(str(telefono or ""))
+    return hashlib.sha256(telefono_normalizado.encode("utf-8")).hexdigest()
+
+
+def hash_documento(documento: str) -> str:
+    """SHA-256 del documento del estudiante, en mayúsculas y sin espacios."""
+    codigo = str(documento or "").strip().upper()
+    return hashlib.sha256(codigo.encode("utf-8")).hexdigest()

@@ -345,6 +345,40 @@ class IntentoLogin(models.Model):
         return f"intento_login:{self.pk}"
 
 
+class BajaCuenta(models.Model):
+    """Teléfono y documentos que ya no pueden volver a entrar (`asis_baja_cuenta`).
+
+    Al eliminar la cuenta el teléfono pasa a `deleted:…` y el login dejaría de
+    ver esa fila. Esta tabla guarda solo hashes: el reingreso con el mismo
+    número se rechaza con `STUDENT_LINK_NOT_FOUND`, sin crear otra cuenta.
+
+    `hash_documento` queda registrado por trazabilidad. El corte del login es
+    por `hash_telefono`: el otro papá, con otro número y el mismo documento,
+    sigue pudiendo entrar.
+    """
+
+    hash_telefono = models.CharField(max_length=64)
+    hash_documento = models.CharField(max_length=64)
+    creado_en = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "asis_baja_cuenta"
+        verbose_name = "Baja de cuenta"
+        verbose_name_plural = "Bajas de cuenta"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["hash_telefono", "hash_documento"],
+                name="asis_baja_cuenta_unica",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["hash_telefono"], name="asis_idx_baja_telefono"),
+        ]
+
+    def __str__(self) -> str:
+        return f"baja_cuenta:{self.pk}"
+
+
 class Auditoria(models.Model):
     """Rastro de acciones del canal (`asis_auditoria`).
 

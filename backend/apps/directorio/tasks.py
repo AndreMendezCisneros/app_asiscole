@@ -42,18 +42,28 @@ def _reconciliar_colegio(tenant_id: str) -> dict[str, int]:
     telefonos_tocados: set[str] = set()
     upserts = 0
 
+    omitidos_todos: set[str] = set()
     for vinculo in repositorio.iterar_directorio(tenant_id):
         lote.append(vinculo)
         telefonos_tocados.add(vinculo.telefono)
         if len(lote) >= TAMANO_LOTE_UPSERT:
-            upserts += services.guardar_vinculos(lote)
+            omitidos = services.telefonos_dados_de_baja([v.telefono for v in lote])
+            omitidos_todos.update(omitidos)
+            lote = [v for v in lote if v.telefono not in omitidos]
+            if lote:
+                upserts += services.guardar_vinculos(lote)
             lote = []
 
     if lote:
-        upserts += services.guardar_vinculos(lote)
+        omitidos = services.telefonos_dados_de_baja([v.telefono for v in lote])
+        omitidos_todos.update(omitidos)
+        lote = [v for v in lote if v.telefono not in omitidos]
+        if lote:
+            upserts += services.guardar_vinculos(lote)
 
     dados_de_baja = services.marcar_inactivos_no_vistos(tenant_id, inicio)
     telefonos_tocados.update(dados_de_baja)
+    telefonos_tocados.difference_update(omitidos_todos)
 
     invalidadas = cache_directorio.invalidar_muchos(telefonos_tocados)
 

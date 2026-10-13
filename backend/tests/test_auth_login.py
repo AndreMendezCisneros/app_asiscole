@@ -18,8 +18,9 @@ from apps.cuentas.models import (
     PushToken,
     SesionActiva,
 )
+from apps.cuentas.perfil_services import eliminar_cuenta
 from apps.cuentas.tokens import TIPO_DATOS, TIPO_SESION, decodificar
-from tests.conftest import DEVICE_A, DEVICE_B, DOCUMENTO, TELEFONO, cuerpo_login
+from tests.conftest import DEVICE_A, DEVICE_B, DOCUMENTO, TELEFONO, TENANT, cuerpo_login
 
 URL_LOGIN = "/v0.1/auth/login"
 
@@ -95,6 +96,76 @@ def test_documento_que_no_coincide_devuelve_404(api, vinculo_en_directorio):
     for pista in ("teléfono", "telefono", "documento"):
         assert pista not in cuerpo["message"].lower()
     assert not SesionActiva.objects.exists()
+
+
+def test_cuenta_eliminada_no_vuelve_a_entrar_ni_crea_otra_fila(
+    api, vinculo_en_directorio
+):
+    """RF-I06: el mismo teléfono no crea un segundo apoderado."""
+    primero = api.post(URL_LOGIN, cuerpo_login(), format="json")
+    assert primero.status_code == 200
+    apo = Apoderado.objects.get()
+    eliminar_cuenta(apo, DOCUMENTO)
+
+    segundo = api.post(URL_LOGIN, cuerpo_login(), format="json")
+
+    assert segundo.status_code == 404
+    assert segundo.json()["code"] == "STUDENT_LINK_NOT_FOUND"
+    assert "No encontramos un estudiante registrado con esos datos" in segundo.json()["message"]
+    assert Apoderado.objects.filter(telefono=TELEFONO).count() == 0
+    assert Apoderado.objects.filter(estado="eliminado").count() == 1
+
+
+def test_cuenta_eliminada_tambien_bloquea_otro_documento_de_la_misma_cuenta(
+    api, vinculo_en_directorio
+):
+    """El corte es por teléfono: otro hijo de esa cuenta tampoco entra."""
+    from apps.directorio.models import VINCULO_ACTIVO, Directorio
+
+    Directorio.objects.create(
+        telefono=TELEFONO,
+        tenant_id=TENANT,
+        id_estudiante=202,
+        codigo_barras="70999999",
+        nombre_estudiante="Hermano",
+        estado_vinculo=VINCULO_ACTIVO,
+    )
+    api.post(URL_LOGIN, cuerpo_login(), format="json")
+    eliminar_cuenta(Apoderado.objects.get(), DOCUMENTO)
+
+    otro = api.post(URL_LOGIN, cuerpo_login(documento_estudiante="70999999"), format="json")
+
+    assert otro.status_code == 404
+    assert otro.json()["code"] == "STUDENT_LINK_NOT_FOUND"
+    assert Apoderado.objects.filter(telefono=TELEFONO).count() == 0
+
+
+def test_el_otro_papa_sigue_entrando_con_el_mismo_documento(
+    api, vinculo_en_directorio, monkeypatch
+):
+    """Un segundo teléfono vinculado al mismo estudiante no se bloquea."""
+    otro_tel = "+51987654322"
+    from apps.directorio.models import VINCULO_ACTIVO, Directorio
+
+    api.post(URL_LOGIN, cuerpo_login(), format="json")
+    eliminar_cuenta(Apoderado.objects.get(), DOCUMENTO)
+
+    Directorio.objects.create(
+        telefono=otro_tel,
+        tenant_id=TENANT,
+        id_estudiante=vinculo_en_directorio.id_estudiante,
+        codigo_barras=DOCUMENTO,
+        nombre_estudiante="Estudiante De Prueba",
+        estado_vinculo=VINCULO_ACTIVO,
+    )
+    monkeypatch.setattr(
+        "apps.directorio.repositorio.consultar_colegio",
+        lambda tenant, telefono: [],
+    )
+    respuesta = api.post(URL_LOGIN, cuerpo_login(telefono=otro_tel), format="json")
+
+    assert respuesta.status_code == 200
+    assert Apoderado.objects.filter(telefono=otro_tel, estado="activo").exists()
 
 
 def test_telefono_desconocido_devuelve_404(api, db, colegios, monkeypatch):

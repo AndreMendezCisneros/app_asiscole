@@ -179,6 +179,25 @@ def resolver_en_colegios(telefono_e164: str) -> ResultadoColegios:
 # Paso 4: persistencia de lo hallado
 # ---------------------------------------------------------------------------
 
+def telefonos_dados_de_baja(telefonos: list[str]) -> set[str]:
+    """Devuelve, de la lista, los teléfonos cuyo hash está en `asis_baja_cuenta`.
+
+    La reconciliación nocturna usa esto para no rearmar un vínculo que el
+    apoderado ya cerró al eliminar la cuenta.
+    """
+    from apps.common.phone import hash_telefono
+    from apps.cuentas.models import BajaCuenta
+
+    unicos = [t for t in dict.fromkeys(telefonos) if t]
+    if not unicos:
+        return set()
+    huellas = {hash_telefono(t): t for t in unicos}
+    halladas = BajaCuenta.objects.filter(hash_telefono__in=huellas).values_list(
+        "hash_telefono", flat=True
+    )
+    return {huellas[h] for h in halladas}
+
+
 def guardar_vinculos(vinculos: list[VinculoDTO], *, origen: str = ORIGEN_AUTOMATICO) -> int:
     """Hace upsert de una lista de vinculos en `asis_directorio`.
 

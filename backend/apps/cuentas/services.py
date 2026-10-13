@@ -36,7 +36,7 @@ from apps.common.errors import (
     Unauthenticated,
     ValidationError,
 )
-from apps.common.phone import normalizar_e164
+from apps.common.phone import hash_telefono, normalizar_e164
 from apps.cuentas import notificaciones, rate_limit, tokens
 from apps.cuentas.models import (
     CUENTA_ACTIVA,
@@ -54,6 +54,7 @@ from apps.cuentas.models import (
     TRANSFERENCIA_PENDIENTE,
     TRANSFERENCIA_RECHAZADA,
     Apoderado,
+    BajaCuenta,
     PushToken,
     SesionActiva,
     TransferenciaSesion,
@@ -270,8 +271,14 @@ def _validar_credencial(telefono_e164: str, documento: str, credencial: str, ip:
     Raises:
         StudentLinkNotFound: No hay vinculo para ese telefono, o ninguno de sus
             estudiantes tiene ese documento. No se distingue cual fallo.
+            Tambien si ese telefono ya se dio de baja (RF-I06).
         UpstreamSchoolDbUnavailable: No se pudo verificar contra los colegios.
     """
+    if BajaCuenta.objects.filter(hash_telefono=hash_telefono(telefono_e164)).exists():
+        rate_limit.registrar_fallo_login(credencial, ip)
+        logger.info("login_denegado", extra={"resultado": "cuenta_dada_de_baja"})
+        raise StudentLinkNotFound()
+
     vinculos = directorio.resolver_vinculos(telefono_e164)
     if not vinculos:
         rate_limit.registrar_fallo_login(credencial, ip)

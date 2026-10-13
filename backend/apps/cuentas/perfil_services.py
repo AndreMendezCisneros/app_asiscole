@@ -10,12 +10,14 @@ from django.utils import timezone
 
 from apps.academico.authz import vinculo_estudiante
 from apps.common.errors import StudentLinkNotFound, ValidationError
+from apps.common.phone import hash_documento, hash_telefono
 from apps.cuentas.models import (
     CUENTA_ELIMINADA,
     SESION_ACTIVA,
     SESION_REVOCADA,
     Apoderado,
     Auditoria,
+    BajaCuenta,
     PushToken,
     SesionActiva,
 )
@@ -143,6 +145,27 @@ def eliminar_cuenta(apoderado: Apoderado, documento_estudiante: str) -> None:
     ).exists()
     if not existe:
         raise StudentLinkNotFound()
+
+    documentos = list(
+        Directorio.objects.filter(
+            telefono=apoderado.telefono,
+            estado_vinculo=VINCULO_ACTIVO,
+        )
+        .exclude(codigo_barras="")
+        .values_list("codigo_barras", flat=True)
+        .distinct()
+    )
+    huella_telefono = hash_telefono(apoderado.telefono)
+    for codigo in documentos:
+        BajaCuenta.objects.get_or_create(
+            hash_telefono=huella_telefono,
+            hash_documento=hash_documento(codigo),
+        )
+    if not documentos:
+        BajaCuenta.objects.get_or_create(
+            hash_telefono=huella_telefono,
+            hash_documento=hash_documento(documento),
+        )
 
     SesionActiva.objects.filter(apoderado=apoderado, estado=SESION_ACTIVA).update(
         estado=SESION_REVOCADA, ultima_actividad_en=timezone.now()
